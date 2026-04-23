@@ -1,0 +1,51 @@
+[project]
+name = "openkp"
+version = "0.1.0"
+description = "A patient-directed MCP server that bridges Claude and Kaiser Permanente's patient portal."
+authors = [{name = "Test Patient"}]
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+dependencies = [
+    # MCP server
+    "mcp[cli]>=1.2.0",
+    # HTTP client (async)
+    "httpx>=0.27.0",
+    # Browser automation for Ping OAuth login
+    "playwright>=1.47.0",
+    # Parsing HTML responses
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    # Credential management
+    "python-dotenv>=1.0.0",
+    "keyring>=25.0.0",
+    # Data models
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+]
+
+[project.scripts]
+openkp = "openkp.mcp_server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openkp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

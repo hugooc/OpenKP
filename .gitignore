@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Secrets (belt-and-suspenders; package has its own .gitignore too)
+.env
+.env.local
+
+# Research scratch space (never commit captured HAR files or PHI)
+docs/research/captures/
+docs/research/**/*.har
+docs/research/**/*.json.phi
+
+# Python (in case anything leaks outside openkp/)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Reference materials we don't want in git
+openrecord/
+openrecord-source/
+reference/
