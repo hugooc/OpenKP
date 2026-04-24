@@ -9,6 +9,9 @@
 *.swp
 *~
 
+# Claude Code local state (per-project settings, worktrees)
+.claude/
+
 # Secrets (belt-and-suspenders; package has its own .gitignore too)
 .env
 .env.local

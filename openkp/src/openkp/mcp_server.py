@@ -31,6 +31,11 @@ from mcp.server.fastmcp import FastMCP
 
 from openkp import __version__
 from openkp.config import load_config
+from openkp.scrapers.labs import (
+    download_lab_result_pdf as _download_lab_result_pdf,
+    fetch_lab_result,
+    fetch_lab_results,
+)
 from openkp.scrapers.messages import fetch_message, fetch_messages
 from openkp.scrapers.profile import fetch_profile
 from openkp.scrapers.request import KaiserRequest
@@ -181,11 +186,87 @@ async def read_message(thread_id: str) -> dict | None:
     return thread.model_dump() if thread else None
 
 
+@mcp.tool()
+async def list_lab_results(
+    search: str = "",
+    limit: int = 50,
+    include_all_types: bool = False,
+) -> list[dict]:
+    """List recent lab result orders (newest first, LAB type by default).
+
+    Args:
+      search: Optional search string. Kaiser matches against order names and
+        (empirically) other fields. Empty = no filter.
+      limit: Max orders to return. Clamped to 200 (Kaiser's ceiling).
+      include_all_types: If False (default), only LAB-type results. If True,
+        also include IMAGING (radiology, ECG, cardiac device checks) and
+        OTHER (pathology, transcriptions).
+
+    Returns a list of summaries shaped like the `LabResult` pydantic model in
+    `openkp.scrapers.labs`. The `order_key` is the handle you pass to
+    `read_lab_result` or `download_lab_result_pdf` for a specific result.
+
+    See `docs/research/endpoints/labs.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    results = await fetch_lab_results(
+        client,
+        search=search,
+        limit=limit,
+        include_all_types=include_all_types,
+    )
+    return [r.model_dump() for r in results]
+
+
+@mcp.tool()
+async def read_lab_result(order_key: str) -> dict | None:
+    """Read one result in full: components, values, reference ranges, narrative.
+
+    Args:
+      order_key: The `order_key` field from a `list_lab_results` result.
+
+    For LAB-type results, the `components` array carries each individual
+    measurement with `value`, `numeric_value`, `units`, `reference_range`, and
+    `is_abnormal`. For IMAGING / OTHER results, the `narrative`, `impression`,
+    and `result_note` fields carry the prose text (HTML-stripped).
+
+    `has_pdf` tells you whether `download_lab_result_pdf` will return a file.
+    Returns `None` if the order cannot be found.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    result = await fetch_lab_result(client, order_key)
+    return result.model_dump() if result else None
+
+
+@mcp.tool()
+async def download_lab_result_pdf(order_key: str) -> dict:
+    """Download the kp.org-generated PDF report for one result, save to disk.
+
+    Args:
+      order_key: The `order_key` field from a `list_lab_results` result.
+
+    The PDF is saved under `~/.openkp/downloads/`. Returns a dict shaped like
+    the `LabPdfDownload` pydantic model, with `status` being one of:
+      - "downloaded" — PDF saved, `path` holds the local filesystem path.
+      - "no_pdf_available" — Kaiser didn't generate a PDF for this order.
+      - "error" — Something went wrong; `reason` holds a short explanation.
+
+    For large PDFs (cardiac device interrogation reports, imaging studies),
+    the path is what you'd hand to a separate PDF-reading tool or open locally.
+    The bytes are NOT returned through MCP — too big for Claude's context.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    outcome = await _download_lab_result_pdf(client, order_key)
+    return outcome.model_dump()
+
+
 # --- TODO: remaining Phase 2 read tools ----------------------------------------
 # - list_medications()
 # - list_allergies()
 # - list_problems()
-# - list_lab_results(since: str | None = None)
 # - list_visits(limit: int = 10)
 #
 # Phase 3 writes:

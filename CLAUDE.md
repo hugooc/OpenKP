@@ -11,12 +11,13 @@ A local MCP server that bridges Claude and Kaiser Permanente's patient portal. S
 - **Phase 0 scaffold:** complete.
 - **Phase 1 auth:** complete. Silent session reuse via `~/.openkp/session.json` + httpx probe to `/mychartcn/keepalive.asp`. Interactive first-run Chromium, silent after. See ADR-005 and `docs/recon/session-2.md`.
 - **Phase 2 read tools:** in progress.
-  - `get_profile` ✅ shipped + live-verified. Demographics, contact info, insurance plans, PCP (from CareTeam/Load with CSRF dance). `emergency_contacts` still a structured placeholder. See `docs/recon/session-4.md` and `docs/research/endpoints/profile.md`.
-  - `list_messages` + `read_message` ✅ shipped, live-test pending. Message center list + single-thread read via `/mychartcn/api/conversations/*` with a CSP page nonce. See `docs/research/endpoints/messages.md`.
-  - Next: live-test messages tools, then `emergency_contacts` from the Personal Info page, then `list_lab_results`.
+  - `get_profile` ✅ shipped + live-verified. Demographics, contact info, insurance plans, PCP. `emergency_contacts` still a structured placeholder. See `docs/recon/session-4.md`.
+  - `list_messages` + `read_message` ✅ shipped + live-verified. Message center list, single-thread read, search. See `docs/recon/session-5.md`.
+  - `list_lab_results` + `read_lab_result` + `download_lab_result_pdf` ✅ shipped, live-test pending. Test results (labs, imaging, cardiac device reports) plus PDF download to `~/.openkp/downloads/`. See `docs/research/endpoints/labs.md`.
+  - Next: live-test labs tools, then `emergency_contacts`, then medications / allergies / problems.
 - **Phase 3 write tools:** queued.
 
-**Tests:** 122 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+**Tests:** 157 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
 
 ## Read these first
 
