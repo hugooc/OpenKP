@@ -12,10 +12,11 @@ A local MCP server that bridges Claude and Kaiser Permanente's patient portal. S
 - **Phase 1 auth:** complete. Silent session reuse via `~/.openkp/session.json` + httpx probe to `/mychartcn/keepalive.asp`. Interactive first-run Chromium, silent after. See ADR-005 and `docs/recon/session-2.md`.
 - **Phase 2 read tools:** in progress.
   - `get_profile` ✅ shipped + live-verified. Demographics, contact info, insurance plans, PCP (from CareTeam/Load with CSRF dance). `emergency_contacts` still a structured placeholder. See `docs/recon/session-4.md` and `docs/research/endpoints/profile.md`.
-  - Next: fill in `emergency_contacts` from the Personal Info page, then `list_messages` (HAR already captured at `kp-capture-messages-search.har`), then `list_lab_results`.
+  - `list_messages` + `read_message` ✅ shipped, live-test pending. Message center list + single-thread read via `/mychartcn/api/conversations/*` with a CSP page nonce. See `docs/research/endpoints/messages.md`.
+  - Next: live-test messages tools, then `emergency_contacts` from the Personal Info page, then `list_lab_results`.
 - **Phase 3 write tools:** queued.
 
-**Tests:** 80 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+**Tests:** 122 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
 
 ## Read these first
 

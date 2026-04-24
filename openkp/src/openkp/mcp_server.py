@@ -31,6 +31,7 @@ from mcp.server.fastmcp import FastMCP
 
 from openkp import __version__
 from openkp.config import load_config
+from openkp.scrapers.messages import fetch_message, fetch_messages
 from openkp.scrapers.profile import fetch_profile
 from openkp.scrapers.request import KaiserRequest
 from openkp.scrapers.session import SessionStore
@@ -124,14 +125,68 @@ async def get_profile() -> dict:
     return profile.model_dump()
 
 
+@mcp.tool()
+async def list_messages(
+    folder: str = "inbox",
+    search: str | None = None,
+    before_iso: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    """List message threads from the Kaiser message center.
+
+    Args:
+      folder: Which folder to list. One of "inbox", "archive", "bookmarked",
+        "automated", "appointments". Defaults to "inbox".
+      search: Optional search string. Kaiser matches against subject, body,
+        and sender.
+      before_iso: Pagination cursor. Pass the ISO timestamp of the oldest
+        thread from a previous page to fetch older results.
+      limit: Max threads to return. Clamped to 50 (Kaiser's per-page max).
+
+    Returns a list of thread summaries, each shaped like the `MessageThread`
+    pydantic model in `openkp.scrapers.messages`. The `id` field is the
+    thread handle you pass to `read_message`.
+
+    See `docs/research/endpoints/messages.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    threads = await fetch_messages(
+        client,
+        folder=folder,
+        search=search,
+        before_iso=before_iso,
+        limit=limit,
+    )
+    return [t.model_dump() for t in threads]
+
+
+@mcp.tool()
+async def read_message(thread_id: str) -> dict | None:
+    """Read a single message thread in full, including every message's body.
+
+    Args:
+      thread_id: The `id` field from a `list_messages` result.
+
+    Returns a dict shaped like the `MessageThreadDetail` pydantic model. The
+    `messages` array is ordered most-recent-first per Kaiser's convention.
+    Message bodies are HTML-stripped to plain text. Returns `None` if the
+    thread cannot be found.
+
+    See `docs/research/endpoints/messages.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    thread = await fetch_message(client, thread_id)
+    return thread.model_dump() if thread else None
+
+
 # --- TODO: remaining Phase 2 read tools ----------------------------------------
 # - list_medications()
 # - list_allergies()
 # - list_problems()
 # - list_lab_results(since: str | None = None)
 # - list_visits(limit: int = 10)
-# - list_messages(folder: str = "inbox", limit: int = 20)
-# - read_message(message_id: str)
 #
 # Phase 3 writes:
 # - send_message(to, subject, body)

@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import logging
 import random
-import re
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from openkp.scrapers.csrf import fetch_csrf_token
 from openkp.scrapers.request import KaiserRequest
 
 logger = logging.getLogger(__name__)
@@ -31,17 +31,10 @@ logger = logging.getLogger(__name__)
 USER_PATH = "/mycare/v1.0/user"
 USER_REFERER = "https://healthy.kaiserpermanente.org/mychartcn/Home?lang=en-US"
 
-# Care Team endpoints. See docs/research/endpoints/care_team.md.
-CSRF_PATH = "/mychartcn/Home/CSRFToken"
+# Care Team endpoints. See docs/research/endpoints/profile.md.
 CARE_TEAM_PATH = "/mychartcn/Clinical/CareTeam/Load"
 CARE_TEAM_REFERER = "https://healthy.kaiserpermanente.org/mychartcn/clinical/careteam"
 PCP_RELATION = "Primary Care Provider"
-
-# The CSRF response is an HTML fragment: <input ... value="TOKEN" />.
-_CSRF_INPUT_RE = re.compile(
-    r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',
-    re.IGNORECASE,
-)
 
 # Pharmacy consumer identity. See ADR-006.
 PHARMACY_API_KEY = "kprwdpharmctr68973257122561335296"
@@ -192,7 +185,7 @@ async def _fetch_pcp(client: KaiserRequest) -> Provider | None:
     Returns `None` if no provider is flagged as the PCP, or if the response
     is empty / malformed.
     """
-    token = await _fetch_csrf_token(client)
+    token = await fetch_csrf_token(client, referer=CARE_TEAM_REFERER)
     params = {
         "hfrId": "",
         "sources": "",
@@ -210,28 +203,6 @@ async def _fetch_pcp(client: KaiserRequest) -> Provider | None:
     response = await client.post(CARE_TEAM_PATH, params=params, headers=headers, content=b"")
     response.raise_for_status()
     return _parse_pcp(response.json())
-
-
-async def _fetch_csrf_token(client: KaiserRequest) -> str:
-    """Fetch a one-shot CSRF token from /mychartcn/Home/CSRFToken.
-
-    The response is an HTML fragment shaped like
-        <input name="__RequestVerificationToken" type="hidden" value="..." />
-    We extract the value. Raises `ValueError` if the expected input element
-    isn't present.
-    """
-    params = {"noCache": f"{random.random()}"}
-    headers = {
-        "Accept": "*/*",
-        "Referer": CARE_TEAM_REFERER,
-        "X-Requested-With": "XMLHttpRequest",
-    }
-    response = await client.get(CSRF_PATH, params=params, headers=headers)
-    response.raise_for_status()
-    match = _CSRF_INPUT_RE.search(response.text)
-    if not match:
-        raise ValueError("CSRF token input not found in response")
-    return match.group(1)
 
 
 def _user_headers() -> dict[str, str]:

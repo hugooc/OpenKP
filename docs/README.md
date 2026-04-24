@@ -4,6 +4,7 @@ Non-code artifacts that inform the project.
 
 ## Structure
 
+- `architecture.md` — one-page ASCII diagram of the full stack from user prompt to Kaiser endpoint. Start here if you need the big picture.
 - `recon/` — research done before building. Session recons, feasibility analyses, competitive teardowns. These are point-in-time documents, not living specs.
 - `adr/` — Architecture Decision Records. One file per significant decision. Numbered. Never deleted, only superseded.
 - `research/` — ongoing research. Endpoint captures, HAR files, API notes, experiments. The scratch pad.

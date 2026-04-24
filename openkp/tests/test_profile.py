@@ -10,16 +10,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from openkp.scrapers.csrf import CSRF_PATH
 from openkp.scrapers.profile import (
     CARE_TEAM_PATH,
-    CSRF_PATH,
     USER_PATH,
     Address,
     InsurancePlan,
     Phone,
     Profile,
     _clean_date,
-    _fetch_csrf_token,
     _fetch_pcp,
     _format_phone,
     _parse_addresses,
@@ -611,54 +610,6 @@ def test_parse_pcp_missing_optional_fields():
     assert pcp.name == "MINIMAL PCP"
     assert pcp.specialty is None
     assert pcp.profile_url is None
-
-
-# --- CSRF token fetch ---
-
-
-@pytest.mark.asyncio
-async def test_fetch_csrf_token_extracts_token_value():
-    from openkp.scrapers.request import KaiserRequest
-
-    store = _make_store()
-    mock_client, p = _patch_http([httpx.Response(200, text=_csrf_html("abc-123-XYZ"))])
-    try:
-        token = await _fetch_csrf_token(KaiserRequest(store))
-    finally:
-        p.stop()
-
-    assert token == "abc-123-XYZ"
-    call = mock_client.request.await_args
-    assert call.args[0] == "GET"
-    assert CSRF_PATH in call.args[1]
-    # Noise-bust query param
-    assert "noCache" in call.kwargs.get("params", {})
-
-
-@pytest.mark.asyncio
-async def test_fetch_csrf_token_raises_when_input_missing():
-    from openkp.scrapers.request import KaiserRequest
-
-    store = _make_store()
-    _, p = _patch_http([httpx.Response(200, text="<div>no token here</div>")])
-    try:
-        with pytest.raises(ValueError, match="CSRF token"):
-            await _fetch_csrf_token(KaiserRequest(store))
-    finally:
-        p.stop()
-
-
-@pytest.mark.asyncio
-async def test_fetch_csrf_token_propagates_http_error():
-    from openkp.scrapers.request import KaiserRequest
-
-    store = _make_store()
-    _, p = _patch_http([httpx.Response(500, text="boom")])
-    try:
-        with pytest.raises(httpx.HTTPStatusError):
-            await _fetch_csrf_token(KaiserRequest(store))
-    finally:
-        p.stop()
 
 
 # --- _fetch_pcp (HTTP integration: CSRF then CareTeam) ---
