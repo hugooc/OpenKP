@@ -36,6 +36,7 @@ from openkp.scrapers.labs import (
     fetch_lab_result,
     fetch_lab_results,
 )
+from openkp.scrapers.medications import fetch_medications
 from openkp.scrapers.messages import fetch_message, fetch_messages
 from openkp.scrapers.profile import fetch_profile
 from openkp.scrapers.request import KaiserRequest
@@ -266,8 +267,40 @@ async def download_lab_result_pdf(order_key: str) -> dict:
     return outcome.model_dump()
 
 
+@mcp.tool()
+async def list_medications(filter: str = "all") -> dict:
+    """List active and recent prescriptions (medication list).
+
+    Args:
+      filter: "all" (default) returns the full medication list — both
+        currently-orderable and not. "fillable" narrows to Rx that Kaiser
+        flags as currently refillable per its own timing / inventory /
+        regulatory rules.
+
+    Returns a dict shaped like the `MedicationsResponse` pydantic model in
+    `openkp.scrapers.medications`, with a `medications` array plus summary
+    counts (`total_count`, `refillable_count`, `recent_refillable_count`)
+    and the upstream `status_code` / `status_details`.
+
+    Each medication carries: name + brand_name, sig (`instructions`),
+    `prescriber`, `rx_number`, `days_supply`, `refills_remaining`, `copay`,
+    `last_refill_date`, `next_fill_date`, `next_fill_eligible_date`, NDC,
+    plus boolean state for mailable / first fill / new prescription /
+    auto-refill on / eligible / PRN / compound. `is_currently_orderable`
+    indicates whether a refill can be placed right now;
+    `refill_blocked_reason` carries Kaiser's reason code when blocked.
+
+    Source: Kaiser's pharmacy BFF microservices on
+    `apims.kaiserpermanente.org`. This is the first OpenKP tool to use the
+    BFF — see `docs/research/endpoints/medications.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    response = await fetch_medications(client, filter=filter)
+    return response.model_dump()
+
+
 # --- TODO: remaining Phase 2 read tools ----------------------------------------
-# - list_medications()
 # - list_allergies()
 # - list_problems()
 # - list_visits(limit: int = 10)

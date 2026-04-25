@@ -19,7 +19,7 @@ What this means for current work:
 
 See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy).
 
-## Current state (2026-04-24)
+## Current state (2026-04-25)
 
 - **Phase 0 scaffold:** complete.
 - **Phase 1 auth:** complete. Silent session reuse via `~/.openkp/session.json` + httpx probe to `/mychartcn/keepalive.asp`. Interactive first-run Chromium, silent after. See ADR-005 and `docs/recon/session-2.md`.
@@ -27,10 +27,11 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
   - `get_profile` ✅ shipped + live-verified. Demographics, contact info, insurance plans, PCP. `emergency_contacts` still a structured placeholder. See `docs/recon/session-4.md`.
   - `list_messages` + `read_message` ✅ shipped + live-verified. Message center list, single-thread read, search. See `docs/recon/session-5.md`.
   - `list_lab_results` + `read_lab_result` + `download_lab_result_pdf` ✅ shipped + live-verified. Test results (labs, imaging, cardiac device reports) plus PDF download to `~/.openkp/downloads/`. The PDF tool surfaces four statuses: `downloaded`, `generation_in_progress` (Kaiser builds large PDFs on demand, retry in ~30s), `no_pdf_available` (no doc exists), `error`. See `docs/research/endpoints/labs.md` and `docs/recon/session-7.md`.
-  - Next: `list_medications`, then `list_problems`, then `list_allergies`, then finish `emergency_contacts` on `get_profile`.
+  - `list_medications` ✅ shipped + live-verified. Active and recent prescriptions with dose, prescriber, sig, refills, copay, mailable / auto-refill flags. **First scraper to hit the new pharmacy BFF microservices on `apims.kaiserpermanente.org`** — proves session cookies cross subdomains within `.kaiserpermanente.org`. See `docs/research/endpoints/medications.md` and `docs/recon/session-8.md`.
+  - Next: `list_problems`, then `list_allergies`, then finish `emergency_contacts` on `get_profile`.
 - **Phase 3 write tools:** queued.
 
-**Tests:** 169 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+**Tests:** 221 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
 
 ## Read these first
 
@@ -74,6 +75,9 @@ Per DESIGN.md §5 and the shape of `scrapers/profile.py`:
   - Phone numbers are `{area, exchange, subscriber}` objects → format as `AAA-EEE-SSSS`.
   - Region fields can ALL return a type code (`"MRN"`) instead of a real region — including `primaryRegion`, `accountRoleRegion`, and `membershipAccountInfo.region`. Apply the bad-value filter at every source and return `None` when no clean value is found.
   - Phones may all return `primaryIndicator: false` AND the list order varies between calls. Don't invent a primary — report all as `is_primary: false` honestly and let callers pick via `type`/`label`.
+  - GUID can be a JSON number rather than a string. `userIdentityInfo.guid` may come back as `1234567` (int), not `"1234567"`. Coerce with `str(value).strip()`, never `isinstance(str)`. Same applies to other identity fields likely.
+  - **Single-element X-inclusionJsonPath returns a different envelope.** Asking for one path strips the `UserAccountData` wrapper; asking for many (joined by `;`) preserves it. Always use the multi-path form even when you only need one field. See `medications.py:_GUID_INCLUSION_PATHS`.
+- **Pharmacy data:** lives on the new BFF microservices host `apims.kaiserpermanente.org`, NOT `healthy.kaiserpermanente.org/mychartcn/...`. Endpoints under `/kp/mycare/pharmacy-microservices/{rx-cost-inventory-bff, rx-order-management-bff, pharmacy-center-kpweb-bff}/v1/...`. Auth model: header-based (`X-IBM-client-Id`, `x-guid`, `x-region: MRN`, `X-KPSessionID: undefined`) PLUS the same session cookies. Cookies cross subdomains automatically because they're scoped to `.kaiserpermanente.org`. See `medications.py` for the working pattern. v1 only uses `rxDetails`.
 
 ## Live-testing workflow
 
