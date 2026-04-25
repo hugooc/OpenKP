@@ -80,6 +80,12 @@ Per DESIGN.md §5 and the shape of `scrapers/profile.py`:
   - **Single-element X-inclusionJsonPath returns a different envelope.** Asking for one path strips the `UserAccountData` wrapper; asking for many (joined by `;`) preserves it. Always use the multi-path form even when you only need one field. See `medications.py:_GUID_INCLUSION_PATHS`.
 - **Pharmacy data:** lives on the new BFF microservices host `apims.kaiserpermanente.org`, NOT `healthy.kaiserpermanente.org/mychartcn/...`. Endpoints under `/kp/mycare/pharmacy-microservices/{rx-cost-inventory-bff, rx-order-management-bff, pharmacy-center-kpweb-bff}/v1/...`. Auth model: header-based (`X-IBM-client-Id`, `x-guid`, `x-region: MRN`, `X-KPSessionID: undefined`) PLUS the same session cookies. Cookies cross subdomains automatically because they're scoped to `.kaiserpermanente.org`. See `medications.py` for the working pattern. v1 only uses `rxDetails`.
 
+## Development workflow
+
+Dev sessions launch via terminal `claude` from `~/OpenKP/`, not the macOS Claude Code app. The app's per-session worktree default puts code under `.claude/worktrees/<branch>/`, which doesn't match where the Cowork live-test path imports from (`~/OpenKP/openkp/src/`). Worktree-side edits never reach the live MCP server without a manual copy.
+
+All code lands in the main checkout, on `main` or a feature branch. Never under `.claude/worktrees/`. Live tests still happen in Cowork after Cmd+Q and relaunch (existing pattern, unchanged).
+
 ## Live-testing workflow
 
 The MCP server runs as a subprocess under Claude Desktop, configured in `~/Library/Application Support/Claude/claude_desktop_config.json`. Hugo restarts Claude Desktop (Cmd+Q, relaunch) to pick up code changes. Unit tests cover most correctness questions and don't require a restart.

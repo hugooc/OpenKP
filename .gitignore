@@ -31,3 +31,6 @@ venv/
 openrecord/
 openrecord-source/
 reference/
+
+# Local launcher (Hugo-specific)
+Launch OpenKP.command
