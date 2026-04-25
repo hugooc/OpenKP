@@ -8,7 +8,7 @@ Source: `docs/research/captures/kp-login-2.har`, 2026-04-22.
 | --- | --- | --- |
 | Demographics, contact, insurance | `GET /mycare/v1.0/user` (pharmacy header contract) | ✅ Mapped, implemented |
 | PCP name / details | `POST /mychartcn/Clinical/CareTeam/Load` (CSRF-protected) | ✅ Mapped, implemented |
-| Emergency contacts | Unknown | 🔴 Not yet captured — follow-up HAR needed |
+| Emergency contacts | `POST /mychartcn/Demographics/Relationships/GetRelationshipList` (CSRF-protected) | ✅ Mapped, implemented (see `emergency_contacts.md`) |
 
 ## Why not `/mycare/v1.0/uidatalayer/s/profile`?
 
@@ -291,15 +291,15 @@ parent profile still returns demographics/contact/insurance with `pcp=None`
 and a warning logged. Demographics is the critical payload; a Kaiser hiccup
 on the care-team leg shouldn't blow up the whole tool call.
 
-## Emergency contacts — unknown
+## Emergency contacts
 
-Not navigated in the current HAR. Likely lives under
-`/mychartcn/Clinical/PersonalInfo/...` or
-`/mychartcn/Patient/EmergencyContacts`. Confirm with a focused HAR of the
-"Personal Info" section.
+Mapped and implemented. Lives at `POST /mychartcn/Demographics/Relationships/GetRelationshipList`,
+not under `/PersonalInformation/...` as we initially guessed. The endpoint
+returns the full relationship roster (emergency contacts, DPOAHC healthcare
+agents, conservators, "people in your life") in a single payload — see
+`emergency_contacts.md` for the full request/response map.
 
-## Open questions (for next HAR capture)
+## Open questions
 
-1. Emergency contact endpoint URL and response shape.
-2. Does Kaiser actually validate `X-apiKey` → `X-appName` pairings per user, or is X-apiKey purely telemetry/routing? (If the former, we'll need a plan B; ADR-006 tracks this risk.)
-3. CSRF token lifetime — is it bound to a session, or a one-shot? OpenKP refetches per PCP call (cheap) rather than caching, which sidesteps the question.
+1. Does Kaiser actually validate `X-apiKey` → `X-appName` pairings per user, or is X-apiKey purely telemetry/routing? (If the former, we'll need a plan B; ADR-006 tracks this risk.)
+2. CSRF token lifetime — is it bound to a session, or a one-shot? OpenKP refetches per PCP call (cheap) rather than caching, which sidesteps the question.

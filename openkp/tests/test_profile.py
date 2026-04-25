@@ -681,6 +681,9 @@ async def test_fetch_profile_populates_pcp_on_happy_path():
         httpx.Response(200, json=_sample_payload()),
         httpx.Response(200, text=_csrf_html("session-token")),
         httpx.Response(200, json=_sample_care_team()),
+        # Emergency contacts leg also fires on the happy path: CSRF + GetRelationshipList.
+        httpx.Response(200, text=_csrf_html("ec-token")),
+        httpx.Response(200, json={"Relationships": [], "CategoryData": {}}),
     ])
     try:
         profile = await fetch_profile(KaiserRequest(store))
@@ -695,7 +698,9 @@ async def test_fetch_profile_populates_pcp_on_happy_path():
     assert profile.pcp.name == "JANE DOE MD"
     assert profile.pcp.specialty == "Family Practice"
     assert profile.pcp.relation == "Primary Care Provider"
-    assert mock_client.request.await_count == 3
+    # Emergency contacts fetched (empty in this fixture) — confirms the leg ran without raising.
+    assert profile.emergency_contacts == []
+    assert mock_client.request.await_count == 5
 
 
 @pytest.mark.asyncio
@@ -754,3 +759,27 @@ async def test_fetch_profile_resilient_when_careteam_returns_error():
 
     assert profile.first_name == "Jane"
     assert profile.pcp is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_profile_resilient_when_emergency_contacts_fetch_fails():
+    """Demographics + PCP survive if the relationships endpoint 500s."""
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    _, p = _patch_http([
+        httpx.Response(200, json=_sample_payload()),
+        httpx.Response(200, text=_csrf_html("pcp-tok")),
+        httpx.Response(200, json=_sample_care_team()),
+        httpx.Response(200, text=_csrf_html("ec-tok")),
+        httpx.Response(500, text="relationships down"),
+    ])
+    try:
+        profile = await fetch_profile(KaiserRequest(store))
+    finally:
+        p.stop()
+
+    assert profile.first_name == "Jane"
+    assert profile.pcp is not None
+    assert profile.pcp.name == "JANE DOE MD"
+    assert profile.emergency_contacts == []

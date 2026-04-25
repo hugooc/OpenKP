@@ -24,6 +24,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from openkp.scrapers.csrf import fetch_csrf_token
+from openkp.scrapers.emergency_contacts import EmergencyContact, fetch_emergency_contacts
 from openkp.scrapers.request import KaiserRequest
 
 logger = logging.getLogger(__name__)
@@ -120,14 +121,6 @@ class Provider(BaseModel):
     profile_url: str | None = None    # Public mydoctor.kaiserpermanente.org page
 
 
-class EmergencyContact(BaseModel):
-    """An emergency contact. Populated in a follow-up pass (Personal Info endpoint)."""
-
-    name: str
-    relationship: str | None = None
-    phone: str | None = None
-
-
 class Profile(BaseModel):
     """Patient profile. Stable field names; some fields placeholder until mapped."""
 
@@ -150,7 +143,6 @@ class Profile(BaseModel):
 
     insurance_plans: list[InsurancePlan] = Field(default_factory=list)
 
-    # Placeholders. Filled when we capture the Care Team + Personal Info HARs.
     pcp: Provider | None = None
     emergency_contacts: list[EmergencyContact] = Field(default_factory=list)
 
@@ -159,12 +151,12 @@ class Profile(BaseModel):
 
 
 async def fetch_profile(client: KaiserRequest) -> Profile:
-    """Hit /mycare/v1.0/user, then CareTeam, merge into a single `Profile`.
+    """Hit /mycare/v1.0/user, then CareTeam + emergency contacts, merge into one `Profile`.
 
     Never raises on missing fields — returns partial data with `None`s for
-    anything we couldn't find. A failure fetching the care team logs a
-    warning and returns the profile with `pcp=None` rather than breaking
-    the demographics payload.
+    anything we couldn't find. Failures fetching the care team or contact
+    list log a warning and leave the corresponding fields empty rather than
+    breaking the demographics payload, which is the critical leg.
     """
     response = await client.get(USER_PATH, headers=_user_headers())
     response.raise_for_status()
@@ -174,6 +166,14 @@ async def fetch_profile(client: KaiserRequest) -> Profile:
         profile.pcp = await _fetch_pcp(client)
     except Exception as exc:
         logger.warning("PCP fetch failed (%s); returning profile without it", type(exc).__name__)
+
+    try:
+        profile.emergency_contacts = await fetch_emergency_contacts(client)
+    except Exception as exc:
+        logger.warning(
+            "emergency contact fetch failed (%s); returning profile without it",
+            type(exc).__name__,
+        )
 
     return profile
 

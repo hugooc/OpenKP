@@ -121,11 +121,12 @@ async def get_profile() -> dict:
     consumer identity. See ADR-006 for why.
 
     Returns a dict shaped like the `Profile` pydantic model in
-    `openkp.scrapers.profile`. Fields that haven't been mapped yet
-    (PCP, emergency contacts) return null / empty list — they'll be
-    filled in as more endpoints are captured.
+    `openkp.scrapers.profile`, including PCP (from `CareTeam/Load`) and
+    `emergency_contacts` (from `Demographics/Relationships/GetRelationshipList`,
+    which also covers DPOAHC healthcare agents). Either nested fetch failing
+    leaves its slot null / empty rather than failing the whole call.
 
-    See `docs/research/endpoints/profile.md`.
+    See `docs/research/endpoints/profile.md` and `emergency_contacts.md`.
     """
     store = _get_session_store()
     client = KaiserRequest(store)
@@ -356,7 +357,6 @@ async def list_allergies() -> dict:
 
 
 # --- TODO: remaining Phase 2 read tools ----------------------------------------
-# - finish emergency_contacts on get_profile
 # - list_immunizations()
 # - list_visits(limit: int = 10)
 #
