@@ -250,8 +250,11 @@ async def download_lab_result_pdf(order_key: str) -> dict:
     The PDF is saved under `~/.openkp/downloads/`. Returns a dict shaped like
     the `LabPdfDownload` pydantic model, with `status` being one of:
       - "downloaded" — PDF saved, `path` holds the local filesystem path.
-      - "no_pdf_available" — Kaiser didn't generate a PDF for this order.
-      - "error" — Something went wrong; `reason` holds a short explanation.
+      - "generation_in_progress" — Kaiser is building the PDF on demand. Wait
+        ~30 seconds and call this tool again with the same order_key.
+      - "no_pdf_available" — Kaiser does not have a PDF for this order (typical
+        for simple LAB results). Don't retry, the doc will not appear.
+      - "error" — Something went wrong, `reason` holds a short explanation.
 
     For large PDFs (cardiac device interrogation reports, imaging studies),
     the path is what you'd hand to a separate PDF-reading tool or open locally.

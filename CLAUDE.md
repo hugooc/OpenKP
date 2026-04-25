@@ -6,18 +6,31 @@ This file is auto-loaded by Claude Code when it opens `~/OpenKP/`. It's the on-r
 
 A local MCP server that bridges Claude and Kaiser Permanente's patient portal. Single-user, runs on Hugo's Mac. All credentials and PHI stay on the machine. MIT licensed. No hosted service. See `DESIGN.md` §1-2 for the full "why."
 
-## Current state (2026-04-23)
+## v1 audience and distribution
+
+OpenKP v1 ships as an open-source GitHub project for **technically-curious KP members and patient-advocacy peers** — people who have Claude Code installed (or will install it) and can follow a Claude-Code-guided setup. We are deliberately not building a non-technical-user installer in v1. The `.dxt` + bundled-runtime + GUI-credential-entry work is parked at Phase 4.5 and only happens if real demand emerges.
+
+What this means for current work:
+
+- Keep the architecture unchanged. Local-first, MCP-over-stdio, Mac-first is fine.
+- The README must read well for a curious human AND be structured enough for Claude Code to walk a user through install end-to-end.
+- Error messages should be clear, but they don't need to be tuned for non-technical users yet.
+- Lead positioning with the CAIHL frame: patient-directed AI on patient-owned data, not "AI reads my chart."
+
+See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy).
+
+## Current state (2026-04-24)
 
 - **Phase 0 scaffold:** complete.
 - **Phase 1 auth:** complete. Silent session reuse via `~/.openkp/session.json` + httpx probe to `/mychartcn/keepalive.asp`. Interactive first-run Chromium, silent after. See ADR-005 and `docs/recon/session-2.md`.
 - **Phase 2 read tools:** in progress.
   - `get_profile` ✅ shipped + live-verified. Demographics, contact info, insurance plans, PCP. `emergency_contacts` still a structured placeholder. See `docs/recon/session-4.md`.
   - `list_messages` + `read_message` ✅ shipped + live-verified. Message center list, single-thread read, search. See `docs/recon/session-5.md`.
-  - `list_lab_results` + `read_lab_result` + `download_lab_result_pdf` ✅ shipped, live-test pending. Test results (labs, imaging, cardiac device reports) plus PDF download to `~/.openkp/downloads/`. See `docs/research/endpoints/labs.md`.
-  - Next: live-test labs tools, then `emergency_contacts`, then medications / allergies / problems.
+  - `list_lab_results` + `read_lab_result` + `download_lab_result_pdf` ✅ shipped + live-verified. Test results (labs, imaging, cardiac device reports) plus PDF download to `~/.openkp/downloads/`. The PDF tool surfaces four statuses: `downloaded`, `generation_in_progress` (Kaiser builds large PDFs on demand, retry in ~30s), `no_pdf_available` (no doc exists), `error`. See `docs/research/endpoints/labs.md` and `docs/recon/session-7.md`.
+  - Next: `list_medications`, then `list_problems`, then `list_allergies`, then finish `emergency_contacts` on `get_profile`.
 - **Phase 3 write tools:** queued.
 
-**Tests:** 157 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+**Tests:** 169 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
 
 ## Read these first
 

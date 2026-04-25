@@ -127,9 +127,19 @@ class LabResultDetail(LabResult):
 
 
 class LabPdfDownload(BaseModel):
-    """Outcome of a PDF download attempt."""
+    """Outcome of a PDF download attempt.
 
-    status: str                                # "downloaded" | "no_pdf_available" | "error"
+    Status values:
+      - "downloaded"             — PDF is on disk, see `path`.
+      - "generation_in_progress" — Kaiser is building the PDF on demand. Retry
+                                   in ~30 seconds. Common on first request for
+                                   cardiac device checks and imaging reports.
+      - "no_pdf_available"       — No PDF exists or will exist for this order
+                                   (e.g. simple LAB results like a single TSH).
+      - "error"                  — Transport or IO failure; `reason` explains.
+    """
+
+    status: str
     path: str | None = None                    # Local filesystem path when downloaded
     filename: str | None = None
     size_bytes: int | None = None
@@ -223,10 +233,34 @@ async def download_lab_result_pdf(
         headers=_api_headers(csrf, referer=referer),
         json={"orderKey": order_key},
     )
+    # Kaiser redirects (302) from this endpoint when no PDF document exists
+    # for the order, which is typical for simple LAB results. Session-expiry
+    # redirects to Ping are caught upstream by KaiserRequest, so any 3xx
+    # reaching this layer means "no PDF for this order", not "you need to
+    # log in again".
+    if 300 <= gen_response.status_code < 400:
+        logger.info(
+            "GetDocumentGenerationInfo returned %s for order; treating as no_pdf_available",
+            gen_response.status_code,
+        )
+        return LabPdfDownload(
+            status="no_pdf_available",
+            reason=f"GetDocumentGenerationInfo returned {gen_response.status_code} (no document for this order)",
+        )
     gen_response.raise_for_status()
     gen = gen_response.json() if gen_response.content else {}
     document_id = _str_or_none(gen.get("documentID"))
     generation_status = _str_or_none(gen.get("generationStatus"))
+    # Kaiser builds these PDFs on demand. The first request for a cardiac
+    # device check or imaging report typically returns generationStatus =
+    # "Generating" with no document_id yet. A second call ~30 seconds later
+    # comes back as "Generated". We surface this as a distinct status so
+    # callers know to retry rather than give up.
+    if generation_status == "Generating":
+        return LabPdfDownload(
+            status="generation_in_progress",
+            reason=f"generationStatus={generation_status!r} (Kaiser is generating the PDF, retry in ~30 seconds)",
+        )
     if generation_status != "Generated" or not document_id:
         return LabPdfDownload(
             status="no_pdf_available",

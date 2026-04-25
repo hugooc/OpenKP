@@ -1,7 +1,7 @@
 # OpenKP — Design Document
 
 **Version:** 0.1 (living document)
-**Last updated:** April 22, 2026
+**Last updated:** April 24, 2026
 **Author:** Test Patient
 
 ---
@@ -24,6 +24,12 @@ A local MCP server that runs on the user's Mac, exposes patient-portal actions t
 - **Not a replacement for Kaiser.** Every action OpenKP takes is one the user can already take manually.
 - **Not a clinical tool.** OpenKP does not diagnose, recommend treatment, or offer medical judgment. It wires a conversational interface to administrative and informational portal actions.
 - **Not a product.** It's a patient-advocacy research tool and reference implementation. No fees, no usage caps, no business model.
+
+### Who OpenKP is for (v1)
+
+The v1 audience is **technically-curious KP members and patient-advocacy peers**. People who already use Claude Code, or are willing to install it, and can follow a Claude-Code-guided setup. The install path is "clone the repo and let Claude Code walk you through it." That's the bargain we're offering in v1, and it's a real one. It is not a one-click installer for non-technical users. That work is real and significant, and it is parked at Phase 4.5 to be picked up only if v1 generates the kind of demand that justifies it.
+
+This audience choice is deliberate. It lets us ship something genuinely useful to the people most likely to benefit, without taking on a second job as a software distributor. It also matches the CAIHL ethos: empowering patients who are already practicing critical engagement with health AI, and giving them a tool they can fork, audit, and adapt. Over time, if it proves valuable, we widen the audience.
 
 ---
 
@@ -185,22 +191,36 @@ Each phase has an explicit exit criterion. We do not move to the next phase unti
 
 **Estimated effort:** 3-4 weeks.
 
-### Phase 4 — Distribution
+### Phase 4 — Public release on GitHub
 
-**Deliverable:** A `.dxt` file and a short installation video.
+**Audience:** technically-curious KP members and patient-advocacy peers (see Section 1). People who can install Claude Code, or already have it, and follow a Claude-Code-guided setup.
+
+**Deliverable:** A polished public GitHub repo with a README that's readable by a curious human AND structured enough for Claude Code to walk a user through installation end-to-end.
 
 **Work:**
-1. Bundle Python runtime via `pyinstaller` or similar
-2. Bundle Playwright Chromium binary
-3. Build credential-entry UI that writes directly to OS keychain
-4. Sign and notarize for macOS
-5. Package as `.dxt`
-6. Write a three-minute install video for non-technical users
-7. Publish to the CAIHL audience
+1. README rewrite for the v1 audience: prerequisites, exact `claude_desktop_config.json` paths, first-run Chromium login walkthrough, where credentials live, how to verify it's working, common failure modes.
+2. CONTRIBUTING.md and a GitHub Issues template for "Kaiser changed X" reports.
+3. CAIHL-framed positioning copy in the README. Lead with patient-directed AI on patient-owned data, not "AI can read my chart."
+4. License surface, security disclosure path, code of conduct.
+5. Announcement to the CAIHL-adjacent community.
 
-**Exit criterion:** A Kaiser member with no programming experience can install OpenKP and use it within 10 minutes.
+**Out of scope for Phase 4:** bundled installer, `.dxt` packaging, signing/notarization, GUI credential entry, cross-platform builds beyond what currently works on the author's Mac. These move to Phase 4.5 if real demand emerges.
 
-**Estimated effort:** 2-3 weeks.
+**Exit criterion:** A KP member who knows what a terminal is, with Claude Code installed, can clone the repo and complete a successful end-to-end query of their own record (e.g., "summarize my last lipid panel") without needing to ask the author for help.
+
+**Estimated effort:** 1-2 weeks.
+
+### Phase 4.5 (only if Phase 4 generates demand) — Frictionless installer for non-technical users
+
+**Trigger:** Real, repeated requests from non-technical KP members who want to use OpenKP and cannot via the Phase 4 path. Not built speculatively.
+
+**Deliverable:** A `.dxt` file (or equivalent), bundled Python runtime, bundled Playwright Chromium, signed and notarized installer, install video, cross-platform builds if Windows demand exists.
+
+**Work:** what was originally Phase 4. Pyinstaller bundling, Playwright Chromium bundling, credential-entry UI that writes directly to OS keychain, macOS signing and notarization, `.dxt` packaging, three-minute install video.
+
+**Exit criterion:** A KP member with no programming experience can install OpenKP and complete a successful query within 10 minutes.
+
+**Estimated effort:** 4-6 weeks once cross-platform and signing are taken seriously.
 
 ### Phase 5 (optional) — Browser extension architecture
 
@@ -438,12 +458,13 @@ The log is append-only. The user can review it at any time to see exactly what O
 
 ## 10. Distribution strategy
 
-See Section 5 roadmap phases 4 and 5 for the full distribution plan. Summary:
+See Section 5 roadmap phases 4, 4.5, and 5 for the full distribution plan. Summary:
 
-1. **Now:** GitHub repo, Homebrew-style "clone and install" for technical users.
-2. **Phase 4:** `.dxt` for one-click Claude Desktop install by non-technical Kaiser members.
-3. **Phase 5 (maybe):** Chrome extension architecture if Playwright maintenance becomes painful.
-4. **Never:** hosted service. The legal and ethical costs outweigh any convenience gain.
+1. **Now (Phases 1-3):** Build the read and write tools to a credible MVP. Local install for the author and a small group of contributors.
+2. **Phase 4 (next public step):** GitHub release. README structured for both human readers and Claude Code as the install agent. Audience is technically-curious KP members. Mac-first is acceptable in v1 as long as it's called out clearly.
+3. **Phase 4.5 (only if demand justifies it):** `.dxt` installer, bundled runtime, GUI credential entry, signing and notarization, install video. Cross-platform if Windows demand emerges.
+4. **Phase 5 (maybe):** Chrome extension architecture if Playwright maintenance becomes painful.
+5. **Never:** hosted service. The legal and ethical costs outweigh any convenience gain.
 
 ---
 
@@ -507,10 +528,15 @@ Open Record, by Ryan Hughes at Fan Pier Labs, is the prior art and conceptual so
 - The author can complete a real refill request through Claude without ever opening kp.org.
 - The audit log contains at least 50 real actions with zero unintended side effects.
 
-### Phase 4 (distribution)
+### Phase 4 (GitHub release)
 
-- 10+ Kaiser members outside the author's immediate network install the `.dxt` and complete a successful action.
-- At least one CAIHL-adjacent publication references OpenKP as a patient-directed AI case study.
+- 10+ technically-curious KP members outside the author's immediate network clone the public repo, use Claude Code to walk through setup, and complete a successful end-to-end query of their own record.
+- At least one CAIHL-adjacent publication or talk references OpenKP as a patient-directed AI case study.
+- No first-time-setup support escalations to the author. The README + Claude Code path is sufficient.
+
+### Phase 4.5 (frictionless installer, only if pursued)
+
+- 10+ non-technical KP members install via `.dxt` and complete a successful action without ever opening a terminal.
 
 ### Long-term (2+ years)
 

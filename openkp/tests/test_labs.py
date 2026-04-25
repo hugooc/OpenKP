@@ -806,6 +806,54 @@ async def test_download_lab_result_pdf_no_document_available(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_download_lab_result_pdf_generation_in_progress(tmp_path: Path):
+    """Kaiser builds large PDFs on demand. The first request for a cardiac
+    device check or imaging report typically returns generationStatus =
+    "Generating". We surface that as a distinct status so callers know to
+    retry rather than give up.
+    """
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    _, p = _patch_http([
+        httpx.Response(200, text=_csrf_html()),
+        httpx.Response(200, json={"documentID": "", "generationStatus": "Generating"}),
+    ])
+    try:
+        outcome = await download_lab_result_pdf(KaiserRequest(store), "order-pending", download_dir=tmp_path)
+    finally:
+        p.stop()
+
+    assert outcome.status == "generation_in_progress"
+    assert outcome.path is None
+    assert "Generating" in (outcome.reason or "")
+    assert "retry" in (outcome.reason or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_download_lab_result_pdf_redirect_treated_as_no_pdf(tmp_path: Path):
+    """Kaiser returns a 302 from GetDocumentGenerationInfo for orders that
+    have no associated PDF (typical for simple LAB results). We treat that
+    as no_pdf_available rather than letting raise_for_status crash.
+    """
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    _, p = _patch_http([
+        httpx.Response(200, text=_csrf_html()),
+        httpx.Response(302, headers={"Location": "/mychartcn/some/non-ping/path"}),
+    ])
+    try:
+        outcome = await download_lab_result_pdf(KaiserRequest(store), "order-no-pdf", download_dir=tmp_path)
+    finally:
+        p.stop()
+
+    assert outcome.status == "no_pdf_available"
+    assert outcome.path is None
+    assert "302" in (outcome.reason or "")
+
+
+@pytest.mark.asyncio
 async def test_download_lab_result_pdf_empty_order_key_returns_error():
     from openkp.scrapers.request import KaiserRequest
 
