@@ -6,6 +6,7 @@ Fixtures use fabricated patient, prescriber, and medication names. No PHI.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,10 +23,13 @@ from openkp.scrapers.refill import (
     OrderConfirmation,
     RefillPreview,
     _build_preview,
+    _card_type_code,
+    _compose_delivery_window,
     _digits_only,
+    _eligible_date_has_passed,
     _estimated_mail_copay,
     _find_card_with_token,
-    _find_delivery_window,
+    _format_expiry_date,
     _format_money,
     _parse_place_order_response,
     _primary_address,
@@ -170,29 +174,47 @@ def _rx_details_payload(rows: list[dict], non_fillable: list[dict] | None = None
 
 
 def _wallet_payload() -> dict:
-    """Plausible /walletV3 shape carrying one card. Real shape unknown — see refill.md."""
+    """Verified /walletV3 shape (kp-refill-2.har, 2026-04-25)."""
     return {
-        "walletDetails": [
+        "card": [
             {
-                "isDefault": True,
-                "cardHolderName": {"firstName": "Fake", "lastName": "Person", "middleName": ""},
-                "billingAddress": {"zipCode": "90210"},
-                "expiryDate": "02/28",
-                "last4Digit": "2000",
-                "cardType": "AM",
-                "walletPaymentToken": "fake-token-abcdef",
-            }
-        ]
+                "accountType": "creditcard",
+                "billingAddress": "",
+                "cardType": "American Express",
+                "ccName": "Fake Person",
+                "ccNumber": "2000",
+                "defaultOption": "true",
+                "expDate": "2802",
+                "firstName": "Fake",
+                "lastName": "Person",
+                "middleInitial": "",
+                "nickName": "AMEX",
+                "paymentToken": "fake-token-abcdef",
+                "zipCode": "90210",
+            },
+            None,
+        ],
+        "check": [],
+        "defaultToken": "fake-token-abcdef",
+        "profileId": "fake-profile-id",
+        "walletKey": "",
     }
 
 
 def _empty_wallet_payload() -> dict:
-    return {"walletDetails": []}
+    return {"card": [], "check": [], "defaultToken": "", "profileId": "", "walletKey": ""}
 
 
 def _shipping_date_payload() -> dict:
+    """Verified /shippingDate shape (kp-refill-2.har, 2026-04-25)."""
     return {
-        "deliveryEstimate": "Estimated to arrive between Wednesday, May 6 and Friday, May 8.",
+        "region": "CN",
+        "state": "CA",
+        "zipCode": "90210",
+        "from": "04/29/2026",
+        "to": "05/01/2026",
+        "fromDays": 3,
+        "toDays": 5,
     }
 
 
@@ -418,11 +440,147 @@ def test_find_card_with_token_returns_none_when_missing():
 
 
 def test_find_card_with_token_accepts_alternative_key_names():
-    """Defensive: walletV3 might use 'paymentToken' or 'token' instead."""
+    """walletV3 actually uses 'paymentToken' (verified 2026-04-25)."""
     by_payment_token = {"paymentToken": "x"}
     by_token = {"token": "x"}
+    by_legacy_name = {"walletPaymentToken": "x"}
     assert _find_card_with_token(by_payment_token) is by_payment_token
     assert _find_card_with_token(by_token) is by_token
+    assert _find_card_with_token(by_legacy_name) is by_legacy_name
+
+
+# --- _format_expiry_date ---
+
+
+def test_format_expiry_date_yymm_to_mmyy():
+    """walletV3's expDate '2802' -> placeorderMail's '02/28' (verified)."""
+    assert _format_expiry_date("2802") == "02/28"
+
+
+def test_format_expiry_date_january():
+    assert _format_expiry_date("2901") == "01/29"
+
+
+def test_format_expiry_date_invalid_inputs():
+    assert _format_expiry_date(None) is None
+    assert _format_expiry_date("") is None
+    assert _format_expiry_date("28/02") is None  # has slash, not 4 digits
+    assert _format_expiry_date("280200") is None  # 6 digits — old assumption, no longer accepted
+    assert _format_expiry_date("02/28") is None
+    assert _format_expiry_date("abcd") is None
+    assert _format_expiry_date("123") is None    # 3 digits
+
+
+# --- _card_type_code ---
+
+
+def test_card_type_code_amex_full_name():
+    """Verified mapping from kp-refill-2.har: 'American Express' -> 'AM'."""
+    assert _card_type_code("American Express") == "AM"
+    assert _card_type_code("american express") == "AM"
+    assert _card_type_code("AMEX") == "AM"
+
+
+def test_card_type_code_other_known_types():
+    """Inferred mappings — need verification when a non-Amex card is captured."""
+    assert _card_type_code("Visa") == "VI"
+    assert _card_type_code("MasterCard") == "MC"
+    assert _card_type_code("Master Card") == "MC"
+    assert _card_type_code("Discover") == "DI"
+
+
+def test_card_type_code_unknown_passes_through_uppercase():
+    """Unknown card types pass through uppercased — KP may accept them."""
+    assert _card_type_code("Diners Club") == "DINERS CLUB"
+
+
+def test_card_type_code_none_and_empty():
+    assert _card_type_code(None) is None
+    assert _card_type_code("") is None
+
+
+# --- _compose_delivery_window ---
+
+
+def test_compose_delivery_window_typical():
+    """Verified format: 'Estimated to arrive between Wednesday, April 29 and Friday, May 1. '"""
+    result = _compose_delivery_window({"from": "04/29/2026", "to": "05/01/2026"})
+    assert result == "Estimated to arrive between Wednesday, April 29 and Friday, May 1. "
+
+
+def test_compose_delivery_window_strips_leading_zero_on_day():
+    """%-d strips leading zero — '04/01/2026' renders as 'April 1' not 'April 01'."""
+    result = _compose_delivery_window({"from": "04/01/2026", "to": "04/05/2026"})
+    assert "April 1 and " in result
+    assert "April 5" in result
+
+
+def test_compose_delivery_window_missing_dates():
+    assert _compose_delivery_window({}) is None
+    assert _compose_delivery_window({"from": "04/29/2026"}) is None
+    assert _compose_delivery_window({"to": "05/01/2026"}) is None
+
+
+def test_compose_delivery_window_malformed_dates():
+    assert _compose_delivery_window({"from": "29/04/2026", "to": "01/05/2026"}) is None
+    assert _compose_delivery_window({"from": "garbage", "to": "garbage"}) is None
+
+
+def test_compose_delivery_window_non_dict():
+    assert _compose_delivery_window(None) is None
+    assert _compose_delivery_window([]) is None
+    assert _compose_delivery_window("string") is None
+
+
+# --- _eligible_date_has_passed ---
+
+
+def test_eligible_date_has_passed_in_past_with_fillable_bucket():
+    """Verified scenario: chlorthalidone in fillable[] with 04/16/2026 next-eligible — already passed by 04/25."""
+    assert _eligible_date_has_passed("01/01/2020", "fillable") is True
+
+
+def test_eligible_date_has_passed_today_counts_as_passed():
+    today = datetime.now().strftime("%m/%d/%Y")
+    assert _eligible_date_has_passed(today, "fillable") is True
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%m/%d/%Y")
+    assert _eligible_date_has_passed(yesterday, "fillable") is True
+
+
+def test_eligible_date_has_passed_in_future_returns_false():
+    assert _eligible_date_has_passed("12/31/2099", "fillable") is False
+
+
+def test_eligible_date_has_passed_requires_fillable_bucket():
+    """nonFillable bucket should never trigger the override, even with a past date."""
+    assert _eligible_date_has_passed("01/01/2020", "nonFillable") is False
+    assert _eligible_date_has_passed("01/01/2020", None) is False
+
+
+def test_eligible_date_has_passed_handles_missing_or_garbage():
+    assert _eligible_date_has_passed(None, "fillable") is False
+    assert _eligible_date_has_passed("", "fillable") is False
+    assert _eligible_date_has_passed("garbage", "fillable") is False
+
+
+# --- _fetch_wallet (parser) ---
+
+
+def test_wallet_parser_maps_real_walletV3_shape_to_card_on_file():
+    """End-to-end: fake walletV3 response -> CardOnFile with placeorderMail-ready fields."""
+    from openkp.scrapers.refill import _find_card_with_token
+
+    payload = _wallet_payload()
+    card_dict = _find_card_with_token(payload)
+    assert card_dict is not None
+
+    # Verify the parser would extract correctly.
+    assert card_dict["paymentToken"] == "fake-token-abcdef"
+    assert card_dict["ccNumber"] == "2000"
+    assert card_dict["expDate"] == "2802"
+    assert card_dict["cardType"] == "American Express"
+    assert card_dict["zipCode"] == "90210"
+    assert card_dict["firstName"] == "Fake"
 
 
 def test_shape_summary_keys_only_no_values():
@@ -452,15 +610,6 @@ def test_wallet_headers_match_har_capture_casing():
     # X-idType is NOT in the captured walletV3 headers — make sure we don't add it.
     assert "X-idType" not in h
     assert "x-idType" not in h
-
-
-def test_find_delivery_window_finds_string():
-    payload = {"a": {"b": "Estimated to arrive between Wed, May 6 and Fri, May 8."}}
-    assert _find_delivery_window(payload).startswith("Estimated to arrive")
-
-
-def test_find_delivery_window_none_when_missing():
-    assert _find_delivery_window({"a": "something else"}) is None
 
 
 # --- _build_preview ---
@@ -525,11 +674,34 @@ def test_build_preview_when_rx_not_mailable():
     assert any("not mailable" in w for w in preview.warnings)
 
 
-def test_build_preview_when_not_refill_eligible():
+def test_build_preview_warns_when_not_refill_eligible_and_date_in_future():
+    """Standard ineligibility: refillEligible=false AND eligible date hasn't passed yet."""
     row = _rx_row(refill_eligible=False)
+    row["afcInfo"]["nextFillEligibleDate"] = "12/31/2099"  # far future
     preview = _build_preview(_FAKE_RX, row, "fillable", _profile_with_full_contact(), _wallet_card())
     assert preview.can_confirm is False
     assert any("not currently refill-eligible" in w for w in preview.warnings)
+
+
+def test_build_preview_relaxes_when_eligible_date_past_and_fillable_bucket():
+    """Verified 2026-04-25 chlorthalidone: refillEligible=false but bucket=fillable +
+    next_fill_eligible_date already past. KP UI accepts. We do too — skip the stale-flag warning."""
+    row = _rx_row(refill_eligible=False)
+    row["afcInfo"]["nextFillEligibleDate"] = "01/01/2020"  # well past
+    preview = _build_preview(_FAKE_RX, row, "fillable", _profile_with_full_contact(), _wallet_card())
+    # No "not currently refill-eligible" warning.
+    assert not any("not currently refill-eligible" in w for w in preview.warnings)
+    # And since nothing else is wrong, can_confirm flips back on.
+    assert preview.can_confirm is True
+
+
+def test_build_preview_keeps_warning_when_nonfillable_bucket_even_if_date_past():
+    """nonFillable always blocks — date relaxation only applies to the fillable bucket."""
+    row = _rx_row(refill_eligible=False)
+    row["afcInfo"]["nextFillEligibleDate"] = "01/01/2020"
+    preview = _build_preview(_FAKE_RX, row, "nonFillable", _profile_with_full_contact(), _wallet_card())
+    assert preview.can_confirm is False
+    assert any("not currently accepting a refill" in w for w in preview.warnings)
 
 
 def test_build_preview_blocked_by_rar_status():

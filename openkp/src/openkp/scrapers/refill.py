@@ -261,7 +261,12 @@ def _build_preview(
         warnings.append("Kaiser is not currently accepting a refill for this Rx")
     if not _bool_truthy(rx_row.get("mailable")):
         warnings.append("prescription is not mailable (mail-order is the only v1 delivery method)")
-    if not rx_row.get("refillEligible"):
+    # `refillEligible` can lag reality. Verified 2026-04-25 chlorthalidone test:
+    # Kaiser kept refillEligible=false even though the Rx was in fillable[],
+    # next_fill_eligible_date had passed, and the kp.org pharmacy UI accepted
+    # the order without complaint. Treat bucket=fillable + past-eligible-date
+    # as the authoritative "yes" signal and skip the stale-flag warning.
+    if not rx_row.get("refillEligible") and not _eligible_date_has_passed(next_fill_eligible, bucket):
         if next_fill_eligible:
             warnings.append(
                 f"Kaiser flags this Rx as not currently refill-eligible "
@@ -458,14 +463,39 @@ async def _find_rx(
 async def _fetch_wallet(client: KaiserRequest, guid: str) -> CardOnFile | None:
     """Fetch the patient's saved payment method from /walletV3.
 
-    The HAR-export elided the response body, so this parser is intentionally
-    defensive: it walks the JSON looking for a payment-token-bearing dict
-    wherever it lives. Returns None if no token is found, which the preview
-    surfaces as "no payment method on file".
+    walletV3 response shape (verified 2026-04-25 from kp-refill-2.har):
 
-    When we get a 200 with content but find no token, log a WARNING that
-    includes the response's top-level structure (key names only — never
-    values) so we can refine the walker without another HAR capture.
+        {
+          "card": [
+            {
+              "accountType": "creditcard",
+              "billingAddress": "",                  # empty STRING, not a sub-object
+              "cardType": "American Express",        # full name, NOT "AM" code
+              "ccName": "Test Patient",
+              "ccNumber": "2000",                    # last-4
+              "expDate": "2802",                     # YYYYMM format
+              "firstName": "...",
+              "lastName": "...",
+              "middleInitial": "",
+              "nickName": "AMEX",
+              "paymentToken": "...",                 # ← what we need
+              "zipCode": "90210"
+            },
+            null
+          ],
+          "check": [],
+          "defaultToken": "...",
+          "profileId": "...",
+          "walletKey": ""
+        }
+
+    placeorderMail expects `creditCardDetails` with field names like
+    `last4Digit`, `expiryDate` ("MM/YY"), `cardType` ("AM"-style code),
+    `cardHolderName.{firstName,lastName,middleName}`, `billingAddress.zipCode`,
+    `walletPaymentToken`. We bridge the two shapes here.
+
+    Returns None when no token-bearing card is found; the preview surfaces
+    that as "no payment method on file".
     """
     response = await client.get(WALLET_URL, headers=_wallet_headers())
     if response.status_code >= 400:
@@ -482,39 +512,43 @@ async def _fetch_wallet(client: KaiserRequest, guid: str) -> CardOnFile | None:
 
     card_dict = _find_card_with_token(payload)
     if card_dict is None:
-        # Diagnostic: report the SHAPE without leaking values. Helps us refine
-        # the walker once we see a real response.
         logger.warning(
-            "walletV3 returned content but no payment token found. "
-            "shape=%s",
+            "walletV3 returned content but no payment token found. shape=%s",
             _shape_summary(payload),
         )
         return None
 
-    holder = card_dict.get("cardHolderName") or {}
-    billing = card_dict.get("billingAddress") or {}
     return CardOnFile(
-        card_holder_first=_str_or_none(holder.get("firstName")),
-        card_holder_last=_str_or_none(holder.get("lastName")),
-        card_holder_middle=_str_or_none(holder.get("middleName")) or "",
-        expiry_date=_str_or_none(card_dict.get("expiryDate")),
-        last_4_digit=_str_or_none(card_dict.get("last4Digit")),
-        card_type=_str_or_none(card_dict.get("cardType")),
+        card_holder_first=_str_or_none(card_dict.get("firstName")),
+        card_holder_last=_str_or_none(card_dict.get("lastName")),
+        card_holder_middle=_str_or_none(card_dict.get("middleInitial")) or "",
+        expiry_date=_format_expiry_date(card_dict.get("expDate")),
+        last_4_digit=_str_or_none(card_dict.get("ccNumber")),
+        card_type=_card_type_code(card_dict.get("cardType")),
         wallet_payment_token=(
-            _str_or_none(card_dict.get("walletPaymentToken"))
-            or _str_or_none(card_dict.get("paymentToken"))
+            _str_or_none(card_dict.get("paymentToken"))
+            or _str_or_none(card_dict.get("walletPaymentToken"))
             or _str_or_none(card_dict.get("token"))
         ),
-        billing_zip=_str_or_none(billing.get("zipCode")),
+        billing_zip=_str_or_none(card_dict.get("zipCode")),
     )
 
 
 async def _fetch_shipping_date(client: KaiserRequest, profile: Profile) -> str | None:
-    """Fetch the human-readable estimated delivery window string.
+    """Fetch the estimated delivery window and format the deliveryStatus string.
 
-    Cosmetic — placeorderMail accepts requests without it (the field is just
-    echoed into the request body and confirmation page). If the call fails,
-    return None and proceed; the order still places.
+    /shippingDate response (verified 2026-04-25 from kp-refill-2.har):
+
+        {"region": "CN", "state": "CA", "zipCode": "90210",
+         "from": "04/29/2026", "to": "05/01/2026",
+         "fromDays": 3, "toDays": 5}
+
+    KP's frontend builds the deliveryStatus string from from/to:
+    "Estimated to arrive between Wednesday, April 29 and Friday, May 1. "
+    (note the trailing space and no year). We do the same here.
+
+    This field is cosmetic — placeorderMail still places the order if it's
+    empty. On any error or parse failure, return None.
     """
     address = _primary_address(profile)
     zip_code = address.postal_code if address else None
@@ -540,8 +574,7 @@ async def _fetch_shipping_date(client: KaiserRequest, profile: Profile) -> str |
         payload = response.json()
     except Exception:
         return None
-    # Best-effort: walk the response for a string that looks like the delivery window.
-    return _find_delivery_window(payload)
+    return _compose_delivery_window(payload)
 
 
 # --- commit POSTs ---
@@ -1006,7 +1039,51 @@ def _max_days_supply_from_fill_options(rx_row: dict[str, Any]) -> list[dict[str,
     return out
 
 
-_TOKEN_KEY_CANDIDATES = ("walletPaymentToken", "paymentToken", "token")
+_TOKEN_KEY_CANDIDATES = ("paymentToken", "walletPaymentToken", "token")
+
+# Lookup from walletV3's full card-type names to the 2-letter codes
+# placeorderMail expects. Verified from kp-refill-2.har for Amex.
+# Other entries are inferred from common Kaiser/Epic conventions and
+# need verification next time a non-Amex card is captured.
+_CARD_TYPE_CODES = {
+    "american express": "AM",
+    "amex": "AM",
+    "visa": "VI",
+    "mastercard": "MC",
+    "master card": "MC",
+    "discover": "DI",
+}
+
+
+def _card_type_code(raw: Any) -> str | None:
+    """Map walletV3's full card-type name ('American Express') to the 2-letter code.
+
+    placeorderMail wants 'AM' / 'VI' / 'MC' / 'DI'. If we don't recognize the
+    input, return the raw value uppercased — KP may accept it, and at worst
+    we get a clean per-Rx response code we can surface to the user.
+    """
+    s = _str_or_none(raw)
+    if not s:
+        return None
+    code = _CARD_TYPE_CODES.get(s.lower())
+    if code:
+        return code
+    logger.warning("walletV3 returned unrecognized cardType %r; sending verbatim uppercase", s)
+    return s.upper()
+
+
+def _format_expiry_date(raw: Any) -> str | None:
+    """Convert walletV3's expDate ('YYMM') to placeorderMail's expiryDate ('MM/YY').
+
+    Verified from kp-refill-2.har: '2802' -> '02/28'. Returns None for any
+    input that isn't exactly 4 digits — better to send empty than garbage.
+    """
+    s = _str_or_none(raw)
+    if not s or len(s) != 4 or not s.isdigit():
+        return None
+    yy = s[0:2]   # year (2 digits)
+    mm = s[2:4]   # month
+    return f"{mm}/{yy}"
 
 
 def _find_card_with_token(value: Any) -> dict[str, Any] | None:
@@ -1049,27 +1126,46 @@ def _shape_summary(value: Any, depth: int = 0, max_depth: int = 3) -> Any:
     return type(value).__name__
 
 
-def _find_delivery_window(value: Any) -> str | None:
-    """Recursive walk for a string that looks like the delivery-window message.
+def _compose_delivery_window(payload: Any) -> str | None:
+    """Build KP's "Estimated to arrive between X and Y." string from from/to dates.
 
-    Same defensive posture as `_find_card_with_token` — the body shape is
-    unconfirmed, so look for a string starting with "Estimated to arrive".
+    Mimics the frontend's output verbatim, including the trailing space and
+    no-year format ("Wednesday, April 29 and Friday, May 1"). Robust to
+    missing or malformed dates: returns None rather than partial string.
     """
-    if isinstance(value, str):
-        if value.lstrip().lower().startswith("estimated to arrive"):
-            return value
+    if not isinstance(payload, dict):
         return None
-    if isinstance(value, dict):
-        for v in value.values():
-            found = _find_delivery_window(v)
-            if found:
-                return found
-    elif isinstance(value, list):
-        for item in value:
-            found = _find_delivery_window(item)
-            if found:
-                return found
-    return None
+    raw_from = _str_or_none(payload.get("from"))
+    raw_to = _str_or_none(payload.get("to"))
+    if not raw_from or not raw_to:
+        return None
+    try:
+        from_dt = datetime.strptime(raw_from, "%m/%d/%Y")
+        to_dt = datetime.strptime(raw_to, "%m/%d/%Y")
+    except ValueError:
+        return None
+    fmt = "%A, %B %-d"  # "Wednesday, April 29" — %-d strips the leading zero
+    return f"Estimated to arrive between {from_dt.strftime(fmt)} and {to_dt.strftime(fmt)}. "
+
+
+def _eligible_date_has_passed(raw_date: str | None, bucket: str | None) -> bool:
+    """True when bucket=fillable AND `next_fill_eligible_date` is today or earlier.
+
+    Used to override a stale `refillEligible: false` flag when Kaiser's own
+    bucket assignment + date math both say "yes". We require BOTH bucket
+    membership and a parsable past date — neither alone is sufficient.
+
+    The date format Kaiser ships in afcInfo.nextFillEligibleDate is MM/DD/YYYY.
+    Returns False on any parse failure (conservative — we'd rather show the
+    warning than skip it on garbage data).
+    """
+    if bucket != "fillable" or not raw_date:
+        return False
+    try:
+        eligible = datetime.strptime(raw_date.strip(), "%m/%d/%Y").date()
+    except ValueError:
+        return False
+    return eligible <= datetime.now().date()
 
 
 def _format_money(value: float | None) -> str:

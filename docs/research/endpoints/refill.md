@@ -269,4 +269,89 @@ Implications:
 
 ## HAR limitations
 
-Chrome's HAR export elided response bodies for the four prep GET endpoints (walletV3, address, cart, shippingDate) and for `rxdeliveryeligibility`. This is the same behavior we hit in session 8. The fix used there — manual `curl` against the live endpoint inside Cowork DevTools — likely works here too if we need to verify shapes before implementing. For now, body-shape inference is from the placeorderMail body where these values get echoed back (shipping address, walletPaymentToken).
+Chrome's first HAR export (`kp-refill-1.har`, 2026-04-25 mid-afternoon) elided response bodies for the four prep GET endpoints. The follow-up capture (`kp-refill-2.har`, 2026-04-25 evening, captured AFTER the chlorthalidone refill) **did include the response bodies** — Chrome's elision behavior seems intermittent. See "Verified response shapes" below.
+
+## Verified response shapes (from kp-refill-2.har)
+
+These shapes were not visible in the first HAR. Code in `refill.py` is now driven by these.
+
+### `GET /walletV3` response
+
+```json
+{
+  "card": [
+    {
+      "accountType": "creditcard",
+      "billingAddress": "",                  // empty STRING, not a sub-object
+      "cardType": "American Express",        // full name, NOT the 2-letter code
+      "ccName": "Test Patient",
+      "ccNumber": "2000",                    // last-4 of card
+      "defaultOption": "true",
+      "expDate": "2802",                     // YYMM format (year-then-month, 4 digits)
+      "firstName": "...",
+      "lastName": "...",
+      "middleInitial": "",
+      "nickName": "AMEX",
+      "paymentToken": "<opaque>",            // ← payload for placeorderMail
+      "zipCode": "90210"
+    },
+    null
+  ],
+  "check": [],
+  "defaultToken": "<opaque>",
+  "profileId": "<opaque>",
+  "walletKey": ""
+}
+```
+
+**Field mapping into `placeorderMail.creditCardDetails`:**
+
+| placeorderMail field | walletV3 source | Transform |
+| --- | --- | --- |
+| `last4Digit` | `ccNumber` | passthrough |
+| `expiryDate` | `expDate` | "2802" → "02/28" (YYMM → MM/YY) |
+| `cardType` | `cardType` | "American Express" → "AM"; lookup table for Visa/MC/Discover (Amex verified, others inferred) |
+| `cardHolderName.firstName` | `firstName` | siblings of paymentToken, NOT a sub-object |
+| `cardHolderName.lastName` | `lastName` | siblings |
+| `cardHolderName.middleName` | `middleInitial` | siblings (rename) |
+| `billingAddress.zipCode` | `zipCode` | sibling, NOT inside `billingAddress` (which is empty string) |
+| `walletPaymentToken` | `paymentToken` | rename |
+
+### `GET /shippingDate` response
+
+```json
+{
+  "region": "CN",
+  "state": "CA",
+  "zipCode": "90210",
+  "from": "04/29/2026",
+  "to": "05/01/2026",
+  "fromDays": 3,
+  "toDays": 5
+}
+```
+
+The `deliveryStatus` string KP echoes into the placeorderMail body and onto the order-confirmation page (e.g. `"Estimated to arrive between Wednesday, April 29 and Friday, May 1. "`) is **constructed by Kaiser's frontend** from `from`/`to`. We compose the same string in `_compose_delivery_window`.
+
+### `POST /rxdeliveryeligibility` response
+
+```json
+{"statuscode": "600", "rxinfo": [], "deliverytypeinfo": {}}
+```
+
+Despite `statuscode: "600"` (not "000"), this is a successful eligibility check — the placeorderMail call that follows succeeds. Treat 600 as OK for v1; revisit if we ever see other codes.
+
+## Eligibility relaxation (verified 2026-04-25)
+
+Live test showed Kaiser's `refillEligible` flag can lag reality. Specifically: a chlorthalidone Rx in the `fillable[]` bucket with `next_fill_eligible_date: 04/16/2026` (in the past) had `refillEligible: false` per `rxDetails`, yet kp.org's pharmacy UI offered an "Add to order" button and **the order placed successfully** when submitted via KP UI.
+
+`_build_preview` now treats `bucket=fillable` + `next_fill_eligible_date` ≤ today as the authoritative "yes" signal and skips the stale-flag warning. The `nonFillable` bucket and a future date both still block.
+
+## Bonus discoveries from kp-refill-2.har
+
+These are not part of v1 but worth recording so we don't re-investigate:
+
+- **`cancelOrderUri` is exposed in the cart response's `ui_config.apiRestUris`.** Even though kp.org's UI doesn't show a cancel button, the BFF appears to expose a cancellation endpoint. Worth investigating before assuming "no self-service cancel" is final. (KP's help docs still say to call the pharmacy.)
+- **`placeOrderPickupApiUri` is in the same `apiRestUris` block** — confirms the local-pickup commit endpoint exists. Future v2 reference for when we add `deliveryMethod="L"`.
+- **`csrfToken` lives in `ui_config.apiRestUris.csrfToken`** in the cart response. We don't currently send one to the BFF and orders still place — but worth knowing this exists if any endpoint ever requires it.
+- **Adjacent endpoints surfaced in this capture (Phase 3 backlog):** `GET /orderStatus` (track refill — already noted in medications.md), `GET /rxnotificationpreferences` (read auto-refill state), `GET /paytoprovider`, `GET /medGuide`, `GET /drugImage`, `GET /rxTransferDetails`.

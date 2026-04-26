@@ -92,6 +92,8 @@ The MCP server runs as a subprocess under Claude Desktop, configured in `~/Libra
 
 When Hugo wants to smoke-test a new tool live, he'll say "restart done, try it" and we call the tool from chat. Claude Code doesn't have the openkp MCP configured by default, so live testing happens in Claude Desktop (Cowork) or by running the server manually via `openkp` script and calling tools over stdio.
 
+**Write-tool live-testing — tail the audit log.** Write tools (Phase 3+) write to `~/.openkp/audit.log` (JSONL) before and after each Kaiser call. Whenever Hugo is about to trigger a write call from Cowork, set up a `Monitor` on `tail -F ~/.openkp/audit.log` *first*, then tell him to go. Events stream into the dev session as they happen — `intent` when the commit starts, `result`/`error` when it finishes. Way better than waiting for the LLM's response to be pasted back, and it works even when something fails before the LLM returns anything useful. The audit log is gitignored and lives outside the repo.
+
 ## Upstream reference — do NOT copy code
 
 https://github.com/Fan-Pier-Labs/openrecord. Permissively licensed but we build fresh per ADR-001. Architectural patterns OK to borrow, implementation is independent.
