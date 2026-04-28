@@ -32,33 +32,31 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
   - `emergency_contacts` (closes Phase 2) ✅ shipped + live-verified. Returns the full relationship roster — emergency contacts, DPOAHC healthcare agents, conservators — from a single Epic/MyChart endpoint. See `docs/research/endpoints/emergency_contacts.md`.
 - **Phase 3 write tools:** underway.
   - `request_refill(medication_id, confirm=False)` ✅ shipped 2026-04-25 (mail-only v1). Two-call confirm pattern, audit log + dry-run scaffolding. **Preview path live-verified, commit path pending next real refill cycle.** See `docs/recon/session-11.md`.
+  - `track_refill_order(order_number)` ✅ shipped + live-verified 2026-04-27 (read sibling to request_refill). Single GET against `/orderDetails`. Surfaces order status (INPROGRESS / SHIPPED / DELIVERED), per-Rx detail, shipping address, payment last-4 / type / expiry, and a derived `tracking_ids` list. **Both INPROGRESS (HAR) and SHIPPED (live, 2026-04-27) verified against real Kaiser data.** Confirmed: `copay` on rxList entries populates post-adjudication (null on INPROGRESS, real $ once shipped), and `SHIPPED` is a real intermediate state where `digitalStatus="Complete"` even though `trackingId` is still empty (carrier handoff lags by hours/days). DELIVERED transition still unverified. See `docs/recon/session-13.md`.
 - **Late-Phase-2 attachments + deep search:**
   - `download_message_attachment` ✅ shipped + live-verified 2026-04-25 (session 12). Two-step chain (`GetDocumentDetailsLegacy` → binary GET). Saves to `~/.openkp/downloads/`. Genetic panels and other clinically important documents arrive as message attachments — Kaiser doesn't surface them in test-results.
   - `list_messages(deep_search=True, max_pages=30)` ✅ shipped + live-verified 2026-04-25 (session 12). Walks pagination via `localSummary.oldestSearchedInstantISO` because Kaiser's `searchQuery` is page-scoped, not index-scoped (default search misses anything older than the most recent ~50 threads). Use this when looking for archival messages. See `docs/research/endpoints/messages.md` "Search" section and `docs/recon/session-12.md`.
 
-**Tests:** 387 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+**Tests:** 397 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
 
 ## Next session: start here
 
-**Pick up with `track_refill_order(order_number)`** — the natural sibling to `request_refill`.
+**Two clean candidates, depending on appetite for capture work:**
 
-Why this is the lowest-friction next:
-- HAR already captured: `docs/research/captures/kp-refill-2-with-order-details.har`. No DevTools session needed before coding.
-- Pure read tool, lower risk than `send_message`.
-- Concretely useful — when the next real refill cycle hits, this is what you'll use to confirm the mail order shipped.
+1. **`send_message` / `reply_to_message`** — needs a fresh HAR capture before coding. Higher-risk write tools (compose new content vs. echo-and-forward state like `request_refill`), so plan for careful preview/confirm patterning. Probably the highest-leverage Phase 3 finish.
 
-Likely shape: one POST to the orderDetails endpoint, returns shipping status, expected delivery, tracking link if present. Probably simpler than `request_refill`'s 3-call commit chain.
+2. **README polish + PHI audit for v1 public release** — no new endpoints, just tightening docs and double-checking that no PHI is leaking through code comments, recon journals, or error messages. The audit is the v1 release blocker per CLAUDE.md.
 
-After `track_refill_order`, the next clean candidates are `send_message` / `reply_to_message` (needs fresh HAR capture first) and the README polish / PHI audit work for v1 public release.
-
-**Loose ends from session 12 (optional, not blocking):**
-- Live-verify `list_messages(deep_search=True)` from Cowork. The download tool was end-to-end verified, but the deep_search code path wasn't called explicitly — Cowork-Claude effectively reproduced the algorithm manually with `before_iso` walking. Ship-ready; just unconfirmed in production form.
-- Spot-check whether MyChart "Documents" / "Visit Notes" / "After Visit Summary" sections hold reports OpenKP doesn't reach. Today's verify confirmed genetic panels can come through messages, but other scanned reports (letters, outside records) might live elsewhere.
+**Loose ends (optional, not blocking):**
+- Verify the DELIVERED transition for the chlorthalidone order from session 11 next time you're in OpenKP. The order number sits in `docs/research/captures/kp-refill-2-with-order-details.har` (gitignored) and the SHIPPED state is already snapshot in session-13.md. The remaining unknowns are the carrier-tracking-attached state and the DELIVERED transition.
+- Live-verify `list_messages(deep_search=True)` from Cowork. The download tool was end-to-end verified in session 12, but the deep_search code path wasn't called explicitly — Cowork-Claude effectively reproduced the algorithm manually with `before_iso` walking.
+- Spot-check whether MyChart "Documents" / "Visit Notes" / "After Visit Summary" sections hold reports OpenKP doesn't reach. Session 12 confirmed genetic panels can come through messages, but other scanned reports (letters, outside records) might live elsewhere.
 
 ## Read these first
 
 - `DESIGN.md` — vision, principles, architecture, roadmap, tool inventory, safety patterns. Single source of truth.
-- `docs/recon/session-12.md` — most recent session: download_message_attachment + list_messages(deep_search=True) shipped to close the genetic-info retrieval flow. Read this for the latest context before starting tomorrow.
+- `docs/recon/session-13.md` — most recent session: track_refill_order shipped (read sibling to request_refill). Read this for the latest context before starting tomorrow.
+- `docs/recon/session-12.md` — download_message_attachment + list_messages(deep_search=True) shipped to close the genetic-info retrieval flow.
 - `docs/recon/session-11.md` — the request_refill ship and Phase 3 opening narrative.
 - `docs/adr/README.md` — architectural decisions index. ADRs 001-006 live here.
 - `docs/research/endpoints/` — per-endpoint request/response maps. Start with `profile.md`.
@@ -85,6 +83,10 @@ Per DESIGN.md §5 and the shape of `scrapers/profile.py`:
 - No PHI in logs. No PHI in error messages returned from MCP tools.
 - No `em dashes` or `semicolons` in prose. Short paragraphs. Contractions are fine.
 - Never mention Claude Code's implementation or internal tooling to Hugo in docs or comments.
+
+## Region scope
+
+OpenKP is NorCal-only as tested. Region codes baked into the code (`"CN"`, `"NCA"`, NorCal ZIPs, NorCal pharmacy phone) reflect the only region we have HAR captures for. When working on new tools, prefer pulling region-shaped values from `profile.py` output (the user's own membership region) over hardcoding, even if today's only test data is NorCal. Anything you can't pull from session data, leave a clear `# NorCal-specific` comment so it's findable when someone tries to port to SoCal or NW.
 
 ## Key endpoint facts (so you don't re-discover them)
 

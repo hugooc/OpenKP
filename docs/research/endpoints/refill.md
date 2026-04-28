@@ -358,8 +358,83 @@ These are not part of v1 but worth recording so we don't re-investigate:
 
 ## `GET /orderDetails` — captured 2026-04-25
 
-The "View order details" page on kp.org is backed by `GET .../rx-order-management-bff/v1/orderDetails?ordernum=<orderNumber>&pharmacyId=`. Response includes everything we'd need for a future `track_refill_order(order_number)` tool: status (API code + UI string), placed/committed timestamps, full Rx list with statuses, shipping address, payment info (last-4 + card-type code), pill image URL, and a `trackingId` field that populates when the order ships.
+The "View order details" page on kp.org is backed by `GET .../rx-order-management-bff/v1/orderDetails?ordernum=<orderNumber>&pharmacyId=`. Backs the `track_refill_order(order_number)` MCP tool.
 
-This response also confirmed our `cardType` → `cardImageCode` mapping is correct: response carries both `"cardType": "American Express"` and `"cardImageCode": "AM"` in the same payload, validating the lookup.
+### Request
 
-Field of interest for a future tracking tool: `orderStatus` cycles through values like `INPROGRESS` (just placed) → presumably `SHIPPED` (with `trackingId` populated) → `DELIVERED`. We've only captured `INPROGRESS` so far.
+```
+GET https://apims.kaiserpermanente.org/kp/mycare/pharmacy-microservices/rx-order-management-bff/v1/orderDetails
+    ?ordernum=030&lt;orderId&gt;&lt;timestamp&gt;
+    &pharmacyId=
+```
+
+`pharmacyId` is sent empty for mail orders. (For local-pickup orders it presumably carries the dispensing pharmacy code — out of scope for v1.)
+
+Headers are a pared-down BFF set. **Notably absent vs `rxDetails`/`cart`:** no `x-guid`, no `X-region`, no `X-KPSessionID`, no `X-idType`. The endpoint resolves the order via `ordernum` alone — patient identity comes from session cookies.
+
+```
+Accept: */*
+Content-Type: application/json
+Origin: https://healthy.kaiserpermanente.org
+Referer: https://healthy.kaiserpermanente.org/
+X-IBM-client-Id: 9dea3678-801b-4069-b111-4d3c5f56c9de
+x-cost-feature: true
+x-benefitsIndicator-feature: false
+```
+
+### Response (captured `INPROGRESS` state)
+
+```json
+{
+  "orderNumber": "030&lt;orderId&gt;&lt;timestamp&gt;",
+  "orderType": "MAIL",
+  "orderStatus": "INPROGRESS",
+  "digitalStatus": "In Progress",
+  "orderPlacedDate": "2026-04-25T23:50:52.207Z",
+  "orderComittedDate": "2026-04-25T23:50:54Z",
+  "placerName": "&lt;PLACER_NAME&gt;",
+  "paymentInfo": [
+    { "cardDigits": "<last4>", "expiryDate": "MM/YYYY",
+      "cardType": "American Express", "cardImageCode": "AM" }
+  ],
+  "rxList": [
+    {
+      "orderForName": "&lt;PLACER_NAME&gt;",
+      "memberId": "<MRN>", "rxmrnrgn": "NCA", "rxmrn": "<MRN>",
+      "rxNumber": "...", "drugName": "CHLORTHALID 25 MG TAB MYLA",
+      "drugNdc": "00378022201", "drgSchdl": "6",
+      "rxStatus": "INPROGRESS", "rxStatusDetails": "",
+      "nextFillDate": "", "phcPhone": "8882186245",
+      "quantity": 100,
+      "imageUrl": "https://content.fdbcloudconnector.com/...",
+      "ccinfo": [{ "lastfour": "<last4>", "exprndt": "YYMM",
+                   "ntwrktyp": "AM", "pcitkn": "<wallet-token>" }],
+      "copay": null, "nhinid": "...",
+      "trackingId": ""
+    }
+  ],
+  "shippingAddress": {
+    "street1": "...", "city": "...", "state": "...",
+    "zipCode": "...", "country": "US"
+  }
+}
+```
+
+### Notable shape quirks
+
+- **`orderComittedDate` is misspelled** in Kaiser's response (one `m`). Send through verbatim from the parser; we don't normalize keys.
+- **`paymentInfo` is a list, not an object.** Multi-card orders appear possible. We surface the full list in `RefillOrder.payment`.
+- **`rxList[].copay` is `null` on `INPROGRESS` orders** even when the patient saw an estimated copay at placement. Probably populated once Kaiser's pharmacy actually adjudicates the claim. Surface as `None`, don't fabricate.
+- **`trackingId` is empty string when not yet shipped.** Treat empty string and missing field identically — both mean "no tracker yet."
+- **`rxList[].ccinfo` duplicates wallet payment details per-Rx.** We do NOT echo `pcitkn` (wallet token) or `lastfour` from the per-Rx ccinfo; the consolidated `paymentInfo[]` covers payment surface.
+- **`cardType` → `cardImageCode` mapping confirmed.** Response carries both `"cardType": "American Express"` and `"cardImageCode": "AM"`, validating the lookup we use in `request_refill`'s wallet bridging.
+- **`drgSchdl` is the DEA controlled-substance schedule** ("6" = unscheduled / non-controlled). Surface as a string; we don't interpret.
+
+### Status transitions (only `INPROGRESS` captured)
+
+`orderStatus` is API-side and presumably cycles `INPROGRESS` → `SHIPPED` (with `trackingId` populated) → `DELIVERED`. `digitalStatus` is the UI-friendly mirror ("In Progress" → presumably "Shipped" / "Delivered"). Surface both — `orderStatus` for programmatic checks, `digitalStatus` for human display. Live-verify the `SHIPPED` branch when Hugo's next mail order ships.
+
+### Out of scope
+
+- **Cancel / modify endpoints.** Kaiser presumably exposes them (the UI has the buttons), but they aren't in this capture and are write actions — defer until there's a clear use case and a fresh HAR.
+- **Per-Rx tracking-link expansion.** `trackingId` is a bare carrier number; resolving it to a USPS/UPS link is a separate concern.

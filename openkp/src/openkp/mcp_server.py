@@ -45,7 +45,10 @@ from openkp.scrapers.messages import (
 )
 from openkp.scrapers.problems import fetch_problems
 from openkp.scrapers.profile import fetch_profile
-from openkp.scrapers.refill import request_refill as _request_refill
+from openkp.scrapers.refill import (
+    fetch_refill_order,
+    request_refill as _request_refill,
+)
 from openkp.scrapers.request import KaiserRequest
 from openkp.scrapers.session import SessionStore
 
@@ -466,11 +469,46 @@ async def request_refill(medication_id: str, confirm: bool = False) -> dict:
     return result.model_dump()
 
 
+@mcp.tool()
+async def track_refill_order(order_number: str) -> dict:
+    """Look up the status of a refill order placed via `request_refill`.
+
+    Args:
+      order_number: The `order_number` field from a `request_refill(confirm=True)`
+        OrderConfirmation. Internal Kaiser reference, not the user-facing
+        digits a patient might see in printed paperwork.
+
+    Returns a dict shaped like the `RefillOrder` pydantic model in
+    `openkp.scrapers.refill`:
+
+    - `order_number`, `order_type` (e.g. "MAIL"), `placer_name`
+    - `order_status` (API code: "INPROGRESS", "SHIPPED", "DELIVERED") and
+      `status_label` ("In Progress", etc. — the UI-friendly mirror)
+    - `placed_at`, `committed_at` (ISO timestamps)
+    - `rx_list[]` — each Rx on the order with `rx_status`, `tracking_id`,
+      `quantity`, `drug_name`, `pharmacy_phone`, `image_url`, etc.
+    - `shipping_address` — full mailing address as Kaiser stored it for the order
+    - `payment[]` — card last-4 / type / expiry only (no token, no holder name)
+    - `tracking_ids[]` — derived convenience list pulled from `rx_list`,
+      empty until at least one Rx ships
+
+    Read-only. No audit log entries.
+
+    Source: `GET /rx-order-management-bff/v1/orderDetails`.
+    See `docs/research/endpoints/refill.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    result = await fetch_refill_order(client, order_number)
+    return result.model_dump()
+
+
 # --- TODO: remaining Phase 2 read tools ----------------------------------------
 # - list_immunizations()
 # - list_visits(limit: int = 10)
 #
 # Phase 3 writes (request_refill ✅ shipped 2026-04-25 — mail-only, see refill.md):
+# Phase 3 reads (track_refill_order ✅ shipped 2026-04-27, see refill.md):
 # - send_message(to, subject, body)
 # - reply_to_message(message_id, body)
 # - book_appointment(provider_id, slot_id)

@@ -1,9 +1,11 @@
 """Refill scraper.
 
-One MCP tool surfaces from this module:
+Two MCP tools surface from this module:
 
 - `request_refill(medication_id, confirm=False)` — preview a mail-order refill
   for one prescription, then commit it on a follow-up call with `confirm=True`.
+- `track_refill_order(order_number)` — read-only status check for an order
+  placed via `request_refill`. Single GET against `/orderDetails`.
 
 v1 ships **mail-order only** (`deliveryMethod: "M"`). Local-pickup support is
 deferred to v2 and requires its own HAR capture before the body schema can be
@@ -62,6 +64,7 @@ WALLET_PATH = "/kp/mycare/payment-sts/paymentsts-bff-walletbff/v1/walletV3"
 CART_PRESCRIPTION_PATH = "/kp/mycare/pharmacy-microservices/pharmacy-center-kpweb-bff/v1/cart/prescription"
 ELIGIBILITY_PATH = "/kp/mycare/pharmacy-microservices/pharmacy-center-kpweb-bff/v1/rxdeliveryeligibility"
 PLACE_ORDER_MAIL_PATH = "/kp/mycare/pharmacy-microservices/rx-place-order-bff/v1/placeorderMail"
+ORDER_DETAILS_PATH = "/kp/mycare/pharmacy-microservices/rx-order-management-bff/v1/orderDetails"
 
 CART_URL = f"{BFF_HOST}{CART_PATH}"
 ADDRESS_URL = f"{BFF_HOST}{ADDRESS_PATH}"
@@ -70,6 +73,7 @@ WALLET_URL = f"{BFF_HOST}{WALLET_PATH}"
 CART_PRESCRIPTION_URL = f"{BFF_HOST}{CART_PRESCRIPTION_PATH}"
 ELIGIBILITY_URL = f"{BFF_HOST}{ELIGIBILITY_PATH}"
 PLACE_ORDER_MAIL_URL = f"{BFF_HOST}{PLACE_ORDER_MAIL_PATH}"
+ORDER_DETAILS_URL = f"{BFF_HOST}{ORDER_DETAILS_PATH}"
 
 # v1 hardcodes mail-order. Local pickup is deferred to v2 — see refill.md.
 DELIVERY_METHOD_MAIL = "M"
@@ -148,6 +152,67 @@ class OrderConfirmation(BaseModel):
     dry_run: bool = False
 
 
+class OrderRxItem(BaseModel):
+    """One Rx line on a refill order."""
+
+    rx_number: str | None = None
+    drug_name: str | None = None
+    ndc: str | None = None
+    quantity: int | None = None
+    rx_status: str | None = None         # API-side: "INPROGRESS", presumably "SHIPPED", "DELIVERED"
+    rx_status_details: str | None = None
+    next_fill_date: str | None = None
+    pharmacy_phone: str | None = None
+    image_url: str | None = None         # Pill image URL (signed, time-limited)
+    tracking_id: str | None = None       # Empty until shipped
+    copay: float | None = None           # Null on INPROGRESS; populated post-adjudication
+    dea_schedule: str | None = None      # Kaiser's drgSchdl, surfaced as a string
+
+
+class OrderShippingAddress(BaseModel):
+    """Mail-order shipping address as Kaiser stored it for the order."""
+
+    street1: str | None = None
+    city: str | None = None
+    state: str | None = None
+    postal_code: str | None = None
+    country: str | None = None
+
+
+class OrderPayment(BaseModel):
+    """One payment method recorded on the order. Card last-4 only — no token surface."""
+
+    card_last4: str | None = None
+    card_type: str | None = None         # Full name from response, e.g. "American Express"
+    card_image_code: str | None = None   # Two-letter code, e.g. "AM"
+    expiry_date: str | None = None       # "MM/YYYY" as Kaiser ships it (different from walletV3's YYMM)
+
+
+class RefillOrder(BaseModel):
+    """Status of a refill order placed via `request_refill`.
+
+    Mirrors Kaiser's `/orderDetails` response. Surfaces both the API-level
+    `order_status` (programmatic — `INPROGRESS`, `SHIPPED`, `DELIVERED`) and
+    the UI-friendly `status_label` (`"In Progress"`, etc.) so callers can
+    pick the one that matches their use case.
+
+    `tracking_ids` is a derived convenience: any non-empty `trackingId` values
+    pulled out of the `rx_list` items, deduped while preserving order.
+    """
+
+    order_number: str | None = None
+    order_type: str | None = None        # "MAIL" for mail-order
+    order_status: str | None = None      # API code: "INPROGRESS", presumably "SHIPPED", "DELIVERED"
+    status_label: str | None = None      # UI mirror: "In Progress", etc.
+    placed_at: str | None = None         # ISO timestamp from orderPlacedDate
+    committed_at: str | None = None      # ISO timestamp from orderComittedDate (Kaiser's typo)
+    placer_name: str | None = None
+    rx_list: list[OrderRxItem] = Field(default_factory=list)
+    shipping_address: OrderShippingAddress | None = None
+    payment: list[OrderPayment] = Field(default_factory=list)
+    tracking_ids: list[str] = Field(default_factory=list)
+
+
 # --- public ---
 
 
@@ -209,6 +274,38 @@ async def request_refill(
         medication_id=medication_id,
         data_dir=data_dir,
     )
+
+
+async def fetch_refill_order(
+    client: KaiserRequest,
+    order_number: str,
+) -> RefillOrder:
+    """Fetch the status of a refill order placed via `request_refill`.
+
+    Args:
+      client: Authenticated KaiserRequest.
+      order_number: The `order_number` returned in the `OrderConfirmation`
+        from `request_refill(confirm=True)`.
+
+    Read-only — no audit log, no commit pipeline. Tolerant of missing fields
+    in the response (returns nulls / empty lists rather than raising). Raises
+    `ValueError` only on invalid input or `httpx.HTTPStatusError` on a non-2xx
+    response.
+
+    Source: `GET /rx-order-management-bff/v1/orderDetails`. See refill.md.
+    """
+    if not isinstance(order_number, str) or not order_number.strip():
+        raise ValueError("order_number must be a non-empty string")
+    order_number = order_number.strip()
+
+    response = await client.get(
+        ORDER_DETAILS_URL,
+        params={"ordernum": order_number, "pharmacyId": ""},
+        headers=_order_details_headers(),
+    )
+    response.raise_for_status()
+    payload = response.json() if response.content else {}
+    return _parse_refill_order(payload)
 
 
 # --- preview construction ---
@@ -863,6 +960,105 @@ def _parse_place_order_response(
     )
 
 
+def _parse_refill_order(payload: Any) -> RefillOrder:
+    """Walk the `/orderDetails` response into a `RefillOrder`.
+
+    Tolerant of malformed responses: missing fields become None / empty list.
+    Never raises on unexpected shapes — this is a read tool and a partial
+    answer beats blowing up the MCP call.
+    """
+    if not isinstance(payload, dict):
+        return RefillOrder()
+
+    rx_list = _parse_order_rx_list(payload.get("rxList"))
+    tracking_ids: list[str] = []
+    seen: set[str] = set()
+    for item in rx_list:
+        if item.tracking_id and item.tracking_id not in seen:
+            seen.add(item.tracking_id)
+            tracking_ids.append(item.tracking_id)
+
+    return RefillOrder(
+        order_number=_str_or_none(payload.get("orderNumber")),
+        order_type=_str_or_none(payload.get("orderType")),
+        order_status=_str_or_none(payload.get("orderStatus")),
+        status_label=_str_or_none(payload.get("digitalStatus")),
+        placed_at=_str_or_none(payload.get("orderPlacedDate")),
+        # Kaiser's typo: "orderComittedDate" (one m). Don't normalize.
+        committed_at=_str_or_none(payload.get("orderComittedDate")),
+        placer_name=_str_or_none(payload.get("placerName")),
+        rx_list=rx_list,
+        shipping_address=_parse_order_shipping_address(payload.get("shippingAddress")),
+        payment=_parse_order_payment(payload.get("paymentInfo")),
+        tracking_ids=tracking_ids,
+    )
+
+
+def _parse_order_rx_list(raw: Any) -> list[OrderRxItem]:
+    if not isinstance(raw, list):
+        return []
+    items: list[OrderRxItem] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        items.append(
+            OrderRxItem(
+                rx_number=_str_or_none(entry.get("rxNumber")),
+                drug_name=_str_or_none(entry.get("drugName")),
+                ndc=_str_or_none(entry.get("drugNdc")),
+                quantity=_int_or_none(entry.get("quantity")),
+                rx_status=_str_or_none(entry.get("rxStatus")),
+                rx_status_details=_str_or_none(entry.get("rxStatusDetails")),
+                next_fill_date=_str_or_none(entry.get("nextFillDate")),
+                pharmacy_phone=_str_or_none(entry.get("phcPhone")),
+                image_url=_str_or_none(entry.get("imageUrl")),
+                tracking_id=_str_or_none(entry.get("trackingId")),
+                copay=_float_or_none(entry.get("copay")),
+                dea_schedule=_str_or_none(entry.get("drgSchdl")),
+            )
+        )
+    return items
+
+
+def _parse_order_shipping_address(raw: Any) -> OrderShippingAddress | None:
+    if not isinstance(raw, dict):
+        return None
+    return OrderShippingAddress(
+        street1=_str_or_none(raw.get("street1")),
+        city=_str_or_none(raw.get("city")),
+        state=_str_or_none(raw.get("state")),
+        postal_code=_str_or_none(raw.get("zipCode")),
+        country=_str_or_none(raw.get("country")),
+    )
+
+
+def _parse_order_payment(raw: Any) -> list[OrderPayment]:
+    if not isinstance(raw, list):
+        return []
+    out: list[OrderPayment] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        out.append(
+            OrderPayment(
+                card_last4=_str_or_none(entry.get("cardDigits")),
+                card_type=_str_or_none(entry.get("cardType")),
+                card_image_code=_str_or_none(entry.get("cardImageCode")),
+                expiry_date=_str_or_none(entry.get("expiryDate")),
+            )
+        )
+    return out
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 # --- header builders ---
 
 
@@ -894,6 +1090,22 @@ def _place_order_headers(guid: str) -> dict[str, str]:
     headers["X-id"] = guid
     headers["X-region"] = BFF_REGION_SENTINEL
     headers["x-idType"] = "GUID"  # capitalized, vs lowercase elsewhere — verbatim
+    headers["x-cost-feature"] = "true"
+    headers["x-benefitsIndicator-feature"] = "false"
+    return headers
+
+
+def _order_details_headers() -> dict[str, str]:
+    """Headers for GET /orderDetails. Pared-down BFF set.
+
+    Notably absent vs `rxDetails`/cart calls: no `x-guid`, no `X-region`,
+    no `X-KPSessionID`, no `X-idType`. The endpoint resolves the order via
+    the `ordernum` query param alone — patient identity comes from session
+    cookies. Header set verified verbatim against
+    `kp-refill-2-with-order-details.har`.
+    """
+    headers = _bff_base_headers()
+    headers["Content-Type"] = "application/json"
     headers["x-cost-feature"] = "true"
     headers["x-benefitsIndicator-feature"] = "false"
     return headers

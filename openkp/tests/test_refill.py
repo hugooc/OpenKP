@@ -17,10 +17,12 @@ from openkp.safety import DRY_RUN_ENV
 from openkp.scrapers.profile import Address, Phone, Profile
 from openkp.scrapers.refill import (
     DELIVERY_METHOD_MAIL,
+    ORDER_DETAILS_URL,
     PLACE_ORDER_MAIL_URL,
     SUCCESS_STATUS_CODE,
     CardOnFile,
     OrderConfirmation,
+    RefillOrder,
     RefillPreview,
     _build_preview,
     _card_type_code,
@@ -32,11 +34,13 @@ from openkp.scrapers.refill import (
     _format_expiry_date,
     _format_money,
     _parse_place_order_response,
+    _parse_refill_order,
     _primary_address,
     _primary_mobile_number,
     _shape_summary,
     _short_address_label,
     _wallet_headers,
+    fetch_refill_order,
     request_refill,
 )
 
@@ -1065,3 +1069,247 @@ async def test_request_refill_invalid_id_raises():
         await request_refill(KaiserRequest(store), "")
     with pytest.raises(ValueError, match="medication_id must be"):
         await request_refill(KaiserRequest(store), "   ")
+
+
+# --- track_refill_order / orderDetails ---
+
+
+_FAKE_ORDER_NUMBER = "030072deb982-fake-order-number-9999"
+
+
+def _order_details_payload(
+    *,
+    order_status: str = "INPROGRESS",
+    digital_status: str = "In Progress",
+    tracking_id: str = "",
+    rx_status: str = "INPROGRESS",
+) -> dict:
+    """Synthesize a /orderDetails response.
+
+    Mirrors the captured 2026-04-25 INPROGRESS shape but lets each test vary
+    `order_status`, `tracking_id`, and `rx_status` to exercise the SHIPPED
+    transition without needing a fresh HAR.
+    """
+    return {
+        "orderNumber": _FAKE_ORDER_NUMBER,
+        "orderType": "MAIL",
+        "orderStatus": order_status,
+        "digitalStatus": digital_status,
+        "orderPlacedDate": "2026-04-25T23:50:52.207Z",
+        "orderComittedDate": "2026-04-25T23:50:54Z",
+        "placerName": "FAKE PERSON",
+        "paymentInfo": [
+            {
+                "cardDigits": "0000",
+                "expiryDate": "02/2028",
+                "cardType": "American Express",
+                "cardImageCode": "AM",
+            }
+        ],
+        "rxList": [
+            {
+                "orderForName": "FAKE PERSON",
+                "memberId": _FAKE_MRN,
+                "rxmrnrgn": "NCA",
+                "rxmrn": _FAKE_MRN,
+                "rxNumber": _FAKE_RX,
+                "drugName": "FAKE DRUG 10 MG TAB",
+                "drugNdc": "00000000000",
+                "drgSchdl": "6",
+                "rxStatus": rx_status,
+                "rxStatusDetails": "",
+                "nextFillDate": "",
+                "phcPhone": "8882186245",
+                "quantity": 100,
+                "imageUrl": "https://content.fdbcloudconnector.com/fake.jpg",
+                "ccinfo": [
+                    {
+                        "lastfour": "0000",
+                        "exprndt": "0228",
+                        "ntwrktyp": "AM",
+                        "pcitkn": "fake-token",
+                    }
+                ],
+                "copay": None,
+                "nhinid": _FAKE_NHIN,
+                "trackingId": tracking_id,
+            }
+        ],
+        "shippingAddress": {
+            "street1": "1 Fake Street",
+            "city": "Faketown",
+            "state": "CA",
+            "zipCode": "90210",
+            "country": "US",
+        },
+    }
+
+
+def test_parse_refill_order_inprogress_full_shape():
+    """Captured INPROGRESS shape parses cleanly. Tracking list empty."""
+    result = _parse_refill_order(_order_details_payload())
+
+    assert isinstance(result, RefillOrder)
+    assert result.order_number == _FAKE_ORDER_NUMBER
+    assert result.order_type == "MAIL"
+    assert result.order_status == "INPROGRESS"
+    assert result.status_label == "In Progress"
+    assert result.placed_at == "2026-04-25T23:50:52.207Z"
+    # Kaiser's misspelled key passed through verbatim.
+    assert result.committed_at == "2026-04-25T23:50:54Z"
+    assert result.placer_name == "FAKE PERSON"
+
+    assert len(result.rx_list) == 1
+    rx = result.rx_list[0]
+    assert rx.rx_number == _FAKE_RX
+    assert rx.drug_name == "FAKE DRUG 10 MG TAB"
+    assert rx.ndc == "00000000000"
+    assert rx.quantity == 100
+    assert rx.rx_status == "INPROGRESS"
+    assert rx.tracking_id is None  # Empty string normalizes to None
+    assert rx.copay is None
+    assert rx.dea_schedule == "6"
+    assert rx.pharmacy_phone == "8882186245"
+    assert rx.image_url.startswith("https://")
+
+    assert result.shipping_address is not None
+    assert result.shipping_address.street1 == "1 Fake Street"
+    assert result.shipping_address.city == "Faketown"
+    assert result.shipping_address.state == "CA"
+    assert result.shipping_address.postal_code == "90210"
+    assert result.shipping_address.country == "US"
+
+    assert len(result.payment) == 1
+    pay = result.payment[0]
+    assert pay.card_last4 == "0000"
+    assert pay.card_type == "American Express"
+    assert pay.card_image_code == "AM"
+    assert pay.expiry_date == "02/2028"
+
+    # No tracking IDs on INPROGRESS.
+    assert result.tracking_ids == []
+
+
+def test_parse_refill_order_shipped_populates_tracking():
+    payload = _order_details_payload(
+        order_status="SHIPPED",
+        digital_status="Shipped",
+        tracking_id="9400111899223197428347",
+        rx_status="SHIPPED",
+    )
+    result = _parse_refill_order(payload)
+
+    assert result.order_status == "SHIPPED"
+    assert result.status_label == "Shipped"
+    assert result.rx_list[0].rx_status == "SHIPPED"
+    assert result.rx_list[0].tracking_id == "9400111899223197428347"
+    assert result.tracking_ids == ["9400111899223197428347"]
+
+
+def test_parse_refill_order_dedupes_tracking_ids_preserving_order():
+    """Multi-Rx orders with shared tracking should dedupe but keep order."""
+    payload = _order_details_payload()
+    payload["rxList"] = [
+        {**payload["rxList"][0], "rxNumber": "111", "trackingId": "TRACK-A"},
+        {**payload["rxList"][0], "rxNumber": "222", "trackingId": "TRACK-B"},
+        {**payload["rxList"][0], "rxNumber": "333", "trackingId": "TRACK-A"},  # dup
+        {**payload["rxList"][0], "rxNumber": "444", "trackingId": ""},          # skip
+    ]
+    result = _parse_refill_order(payload)
+    assert result.tracking_ids == ["TRACK-A", "TRACK-B"]
+
+
+def test_parse_refill_order_handles_missing_fields():
+    """Sparse payloads return nulls / empty lists, never raise."""
+    result = _parse_refill_order({"orderNumber": _FAKE_ORDER_NUMBER})
+    assert result.order_number == _FAKE_ORDER_NUMBER
+    assert result.order_type is None
+    assert result.order_status is None
+    assert result.rx_list == []
+    assert result.shipping_address is None
+    assert result.payment == []
+    assert result.tracking_ids == []
+
+
+def test_parse_refill_order_handles_non_dict_payload():
+    assert _parse_refill_order(None) == RefillOrder()
+    assert _parse_refill_order([]) == RefillOrder()
+    assert _parse_refill_order("not a dict") == RefillOrder()
+
+
+def test_parse_refill_order_skips_non_dict_rx_entries():
+    payload = _order_details_payload()
+    payload["rxList"] = [payload["rxList"][0], "garbage", None, 42]
+    result = _parse_refill_order(payload)
+    assert len(result.rx_list) == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_refill_order_happy_path():
+    """End-to-end: one GET to /orderDetails, parsed response."""
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    responses = [
+        httpx.Response(200, json=_order_details_payload()),
+    ]
+    mock_client, p = _patch_http(responses)
+    try:
+        result = await fetch_refill_order(KaiserRequest(store), _FAKE_ORDER_NUMBER)
+    finally:
+        p.stop()
+
+    assert mock_client.request.await_count == 1
+    call = mock_client.request.await_args_list[0]
+    # KaiserRequest.get → httpx.AsyncClient.request("GET", url, ...). Check shape.
+    assert call.args[0] == "GET"
+    assert call.args[1] == ORDER_DETAILS_URL
+    params = call.kwargs.get("params") or {}
+    assert params.get("ordernum") == _FAKE_ORDER_NUMBER
+    # pharmacyId always sent empty for mail orders (verified in HAR).
+    assert params.get("pharmacyId") == ""
+
+    assert result.order_number == _FAKE_ORDER_NUMBER
+    assert result.order_status == "INPROGRESS"
+
+
+@pytest.mark.asyncio
+async def test_fetch_refill_order_raises_on_http_error():
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    responses = [httpx.Response(404, text="not found")]
+    _, p = _patch_http(responses)
+    try:
+        with pytest.raises(httpx.HTTPStatusError):
+            await fetch_refill_order(KaiserRequest(store), _FAKE_ORDER_NUMBER)
+    finally:
+        p.stop()
+
+
+@pytest.mark.asyncio
+async def test_fetch_refill_order_invalid_input_raises():
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    with pytest.raises(ValueError, match="order_number must be"):
+        await fetch_refill_order(KaiserRequest(store), "")
+    with pytest.raises(ValueError, match="order_number must be"):
+        await fetch_refill_order(KaiserRequest(store), "   ")
+
+
+@pytest.mark.asyncio
+async def test_fetch_refill_order_strips_input_whitespace():
+    """Whitespace-padded order numbers should still hit the endpoint clean."""
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    responses = [httpx.Response(200, json=_order_details_payload())]
+    mock_client, p = _patch_http(responses)
+    try:
+        await fetch_refill_order(KaiserRequest(store), f"  {_FAKE_ORDER_NUMBER}  ")
+    finally:
+        p.stop()
+
+    params = mock_client.request.await_args_list[0].kwargs.get("params") or {}
+    assert params["ordernum"] == _FAKE_ORDER_NUMBER  # no surrounding whitespace
