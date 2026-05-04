@@ -46,7 +46,7 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
 
 **Top candidates, in rough priority order:**
 
-1. **README polish + PHI audit for v1 public release** — the v1 release blocker per this file. No new endpoints, just tightening docs and double-checking that no PHI is leaking through code comments, recon journals, or error messages.
+1. **Git history rewrite + flip repo public** — the **only remaining v1 release blocker.** Working state is PHI-clean (session 17 scrub); old commits still hold the original DOB/GUID/MRN/ZIP/provider names/recon journals in their blobs. Steps documented in `docs/release-checklist.md`. Best done as one focused chunk: `git filter-repo` with the replacement table → force-push → file a GitHub support ticket asking them to GC unreferenced refs (1-3 business-day turnaround) → final pre-flip audit (fresh `git log -p | grep`, walk install steps from a clean directory) → flip repo public. **~3-4 hours of focused work, mostly waiting.**
 
 2. **`reply_to_message(thread_id, body)`** — natural sibling to `send_message`. Needs a fresh HAR capture (the "Reply" button on an opened thread almost certainly hits a different endpoint than compose). Lower-risk than `send_message` because we're not picking a recipient — the thread already names one.
 
@@ -67,11 +67,8 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
 ## Read these first
 
 - `DESIGN.md` — vision, principles, architecture, roadmap, tool inventory, safety patterns. Single source of truth.
-- `docs/recon/session-15.md` — most recent session: list_appointments + list_past_visits ship + live-verified, with the page_size discovery from a follow-up filter HAR.
-- `docs/recon/session-14.md` — send_message ships (preview live-verified) plus list_message_recipients + list_message_topics. Includes the live-discovered topic catalog and the parser-loop story (envelope was `topicList` with `displayName`, not `topics` with `title`).
-- `docs/recon/session-13.md` — track_refill_order shipped (read sibling to request_refill).
-- `docs/recon/session-12.md` — download_message_attachment + list_messages(deep_search=True) shipped to close the genetic-info retrieval flow.
-- `docs/recon/session-11.md` — the request_refill ship and Phase 3 opening narrative.
+- `docs/release-checklist.md` — pre-public-release todos. Items 1 (README) and 4 (LICENSE) done; item 2 (history rewrite) is the only remaining hard blocker.
+- **Recon journals live OUTSIDE the repo** at `~/Desktop/OpenKP Documentation/recon/` (since session 17 — `docs/recon/` is gitignored). The last few are the most relevant context: session-17 (PHI scrub + READMEs), session-16 (visit notes + AVS), session-15 (appointments + page_size), session-14 (send_message), session-13 (track_refill_order).
 - `docs/adr/README.md` — architectural decisions index. ADRs 001-006 live here.
 - `docs/research/endpoints/` — per-endpoint request/response maps. Start with `profile.md`.
 
