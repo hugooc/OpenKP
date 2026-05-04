@@ -2,19 +2,13 @@
 
 Required steps before flipping `github.com/testuser/OpenKP` from private to public. Status as of 2026-05-04.
 
-## 1. README polish (not started)
+## 1. README polish (done 2026-05-04)
 
-The outer `README.md` is thin (48 lines, mostly project layout). The substantive `openkp/README.md` is stale (status says "auth complete... real read tools are next phase" — but 11 read tools and 3 write tools have shipped since).
+Outer `README.md` rewritten to welcome a non-developer KP member, point at install, and frame audience + scope. Inner `openkp/README.md` rewritten with the current 22-tool inventory, install steps tight enough for Claude Code to walk through, first-things-to-try examples, write-tool preview/commit semantics, and updated project layout.
 
-The README must read well for a curious human AND be structured enough for Claude Code to walk a non-developer through end-to-end install on a fresh Mac.
-
-What v1 needs to add:
-- **Updated status** — current tool inventory, test count, what's verified live vs unit-tested only.
-- **Tool inventory** — table of every MCP tool, what it does, what it returns, what's still placeholder.
-- **Install steps** — clean enough that pasting them into Claude Code with "follow these on my Mac" works without manual debugging.
-- **First-tool-to-try** examples — `whoami`, `ping`, `session_check` flow, then `get_profile`.
-- **Security model** — what stays local, what hits Kaiser, where credentials live, how the audit log works.
-- **Regional caveat** — NorCal-only, why, and what porting to SoCal / NW would require.
+What's still rough:
+- The "First authenticated run" step (4 in the inner README) describes piping stdio MCP requests as a fallback. In practice everyone goes straight to step 5 (Claude Desktop). Could simplify.
+- Linux install path is untested. The README says "macOS (tested) or Linux (untested)" — first Linux user will surface anything that breaks.
 
 ## 2. PHI history rewrite (not started — REQUIRED before public)
 
@@ -60,9 +54,9 @@ These live outside the repo (gitignored), so they're not a publication concern, 
 - `docs/research/captures/*.har` — HAR captures contain Kaiser passwords (in form-post bodies), session cookies, full names, addresses, MRNs, GUIDs, message bodies, lab values. Stay on Hugo's Mac, gitignored.
 - `~/Desktop/OpenKP Documentation/recon/session-*.md` — moved out of the repo on 2026-05-04. Contain clinical narrative, real provider names, dates of service. Stay local.
 
-## 4. License + attribution
+## 4. License + attribution (done 2026-05-04)
 
-`README.md` says MIT. `LICENSE` file at `openkp/LICENSE` is referenced but should be verified to exist with the correct text and copyright line.
+`openkp/LICENSE` exists with standard MIT text and a 2026 Test Patient copyright line. Both READMEs reference it.
 
 ## 5. Final pre-flip audit
 
