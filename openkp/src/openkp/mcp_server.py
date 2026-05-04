@@ -32,6 +32,7 @@ from mcp.server.fastmcp import FastMCP
 from openkp import __version__
 from openkp.config import load_config
 from openkp.scrapers.allergies import fetch_allergies
+from openkp.scrapers.appointments import fetch_appointments, fetch_past_visits
 from openkp.scrapers.labs import (
     download_lab_result_pdf as _download_lab_result_pdf,
     fetch_lab_result,
@@ -609,9 +610,90 @@ async def send_message(
     return result.model_dump()
 
 
+@mcp.tool()
+async def list_appointments() -> dict:
+    """Return upcoming and in-progress Kaiser appointments.
+
+    Source: Kaiser's `/mychartcn/Visits/VisitsList/LoadUpcoming` endpoint.
+    Surfaces every visit Kaiser shows on the Visits landing page's
+    "Upcoming" tab — office visits, refill pickups, surgeries, telemedicine,
+    in-progress encounters — flattened into one chronologically-ordered
+    list (in-progress first, then near-future, then later).
+
+    Returns a dict shaped like the `AppointmentsResponse` pydantic model in
+    `openkp.scrapers.appointments`. `instant_iso` is a normalized ISO-8601
+    UTC timestamp; `date_display` and `time_display` are Kaiser's
+    pre-formatted strings (`"Monday May 18, 2026"`, `"1:50 PM"`). Some
+    visit types (notably refills) have `time_display=None`.
+
+    Past visits are NOT included — call `list_past_visits` for those
+    (separate endpoint, paginated).
+
+    See `docs/research/endpoints/appointments.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    response = await fetch_appointments(client)
+    return response.model_dump()
+
+
+@mcp.tool()
+async def list_past_visits(
+    max_pages: int = 1,
+    page_size: int = 50,
+    until_iso: str | None = None,
+) -> dict:
+    """Return past Kaiser visits, paginated newest-first.
+
+    Source: Kaiser's `/mychartcn/Visits/VisitsList/LoadPast` endpoint.
+    Surfaces office visits, refill pickups, surgeries, anesthesia events,
+    and anything else Kaiser shows on the Visits landing page's "Past" tab.
+
+    Args:
+      max_pages: How many pages to walk. Default 1 — at the default
+        `page_size=50`, that's ~50 visits per call. Hard-capped at 60.
+      page_size: Visits per page. Default 50 (vs Kaiser front-end's
+        default of 10). Hard-capped at 78 (highest observed-working value).
+        Bigger pages mean fewer round trips but larger response bodies.
+      until_iso: Optional stop-walking lower bound, ISO-8601 UTC like
+        `"2025-01-01T00:00:00+00:00"`. Walking stops once the oldest
+        visit on a page is older than this. The page that crosses the
+        threshold is still included; filter `instant_iso` on the returned
+        list if you need a strict cutoff.
+
+    Returns a dict shaped like the `PastVisitsResponse` pydantic model in
+    `openkp.scrapers.appointments`:
+
+      - `visits`: list of `PastVisit` objects, newest first.
+      - `total_count`: len(visits).
+      - `pages_walked`: pages actually fetched.
+      - `has_more`: True if Kaiser still has older visits we didn't fetch.
+      - `oldest_instant_iso`: ISO timestamp of the oldest visit returned.
+
+    Each `PastVisit` carries `instant_iso`, `date_display`, `time_display`,
+    `visit_type`, `primary_provider`, `department`, plus past-specific
+    flags: `is_canceled`, `is_no_show`, `is_unread` (Kaiser's "new info"
+    indicator), `bucket` (`"past6month"` / `"past1year"` / ...),
+    `is_telemedicine`, `is_fully_paid`.
+
+    Note: `time_display` is None for some visit types (refills, etc).
+    Trust `instant_iso` as the authoritative timestamp.
+
+    See `docs/research/endpoints/appointments.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    response = await fetch_past_visits(
+        client,
+        max_pages=max_pages,
+        page_size=page_size,
+        until_iso=until_iso,
+    )
+    return response.model_dump()
+
+
 # --- TODO: remaining Phase 2 read tools ----------------------------------------
 # - list_immunizations()
-# - list_visits(limit: int = 10)
 #
 # Phase 3 writes:
 #   request_refill           ✅ shipped 2026-04-25 — mail-only, see refill.md

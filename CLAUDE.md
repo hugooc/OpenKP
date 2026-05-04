@@ -19,7 +19,7 @@ What this means for current work:
 
 See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy).
 
-## Current state (2026-05-03)
+## Current state (2026-05-04)
 
 - **Phase 0 scaffold:** complete.
 - **Phase 1 auth:** complete. Silent session reuse via `~/.openkp/session.json` + httpx probe to `/mychartcn/keepalive.asp`. Interactive first-run Chromium, silent after. See ADR-005 and `docs/recon/session-2.md`.
@@ -30,6 +30,7 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
   - `list_medications` ✅ shipped + live-verified. Active and recent prescriptions with dose, prescriber, sig, refills, copay, mailable / auto-refill flags. **First scraper to hit the new pharmacy BFF microservices on `apims.kaiserpermanente.org`** — proves session cookies cross subdomains within `.kaiserpermanente.org`. See `docs/research/endpoints/medications.md` and `docs/recon/session-8.md`.
   - `list_problems` + `list_allergies` ✅ shipped + live-verified. Active diagnoses (name + date_noted, intentionally minimal — KP doesn't expose ICD/severity to patients) and allergy list (handles "no known allergies" as a first-class state via derived `status` field). Both back on the legacy `/mychartcn/Clinical/<topic>/LoadListData` family — meds was the BFF outlier, not the new normal. See `docs/research/endpoints/problems.md`, `allergies.md`, and `docs/recon/session-9.md`.
   - `emergency_contacts` (closes Phase 2) ✅ shipped + live-verified. Returns the full relationship roster — emergency contacts, DPOAHC healthcare agents, conservators — from a single Epic/MyChart endpoint. See `docs/research/endpoints/emergency_contacts.md`.
+  - `list_appointments` + `list_past_visits` ✅ shipped + live-verified 2026-05-04. Upcoming/in-progress visits (single-call, no pagination) and past visits (paginated walker with `max_pages`, `page_size`, `until_iso` bounds). Both back on the legacy `/mychartcn/Visits/VisitsList/<Load*>` family. **Live-verified twice: "when's my next appointment" returned next visit cleanly; "how many appointments in 2025, split virtual vs in-person" walked past visits and answered correctly (9 clinical encounters: 6 in-person + 3 virtual).** Filter HAR (`kp-appointments-filter.har`) yielded the `numVisitsToRetrieve` discovery (default page=10 in front end, but Kaiser honors up to 78 — OpenKP defaults to 50, 5x fewer round trips for multi-year history). Filter-by-provider would be a future extension via `LoadFilterOptions` (see `appointments.md` "Filter index"). See `docs/recon/session-15.md`.
 - **Phase 3 write tools:** underway.
   - `request_refill(medication_id, confirm=False)` ✅ shipped 2026-04-25 (mail-only v1). Two-call confirm pattern, audit log + dry-run scaffolding. **Preview path live-verified, commit path pending next real refill cycle.** See `docs/recon/session-11.md`.
   - `track_refill_order(order_number)` ✅ shipped + live-verified 2026-04-27 (read sibling to request_refill). Single GET against `/orderDetails`. Surfaces order status (INPROGRESS / SHIPPED / DELIVERED), per-Rx detail, shipping address, payment last-4 / type / expiry, and a derived `tracking_ids` list. **Both INPROGRESS (HAR) and SHIPPED (live, 2026-04-27) verified against real Kaiser data.** Confirmed: `copay` on rxList entries populates post-adjudication (null on INPROGRESS, real $ once shipped), and `SHIPPED` is a real intermediate state where `digitalStatus="Complete"` even though `trackingId` is still empty (carrier handoff lags by hours/days). DELIVERED transition still unverified. See `docs/recon/session-13.md`.
@@ -38,7 +39,7 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
   - `download_message_attachment` ✅ shipped + live-verified 2026-04-25 (session 12). Two-step chain (`GetDocumentDetailsLegacy` → binary GET). Saves to `~/.openkp/downloads/`. Genetic panels and other clinically important documents arrive as message attachments — Kaiser doesn't surface them in test-results.
   - `list_messages(deep_search=True, max_pages=30)` ✅ shipped + live-verified 2026-04-25 (session 12). Walks pagination via `localSummary.oldestSearchedInstantISO` because Kaiser's `searchQuery` is page-scoped, not index-scoped (default search misses anything older than the most recent ~50 threads). Use this when looking for archival messages. See `docs/research/endpoints/messages.md` "Search" section and `docs/recon/session-12.md`.
 
-**Tests:** 432 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+**Tests:** 493 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
 
 ## Next session: start here
 
@@ -54,6 +55,8 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
    - **`body_preview` rename or cap:** today's field name suggests truncation but the implementation only truncates above 200 chars. Either rename to `body` (full echo always) or always cap with `...` suffix when longer.
 
 **Loose ends (optional, not blocking):**
+- **Live-verify the `is_telemedicine` heuristic on `list_appointments` / `list_past_visits`.** Recon had zero virtual visits, so the heuristic (Telemedicine OR EVisit OR CanShowTelemedicine) is inferential. Cowork-Claude bypassed it by reading `visit_type` directly ("Telephone", "Video Visit"), but next time Hugo's calendar has a video or phone visit, peek at the dump to see whether the heuristic actually fires.
+- **Capture a filter-applied appointments HAR** to learn how `LoadPast` accepts a provider/specialty filter ID. The filter UI HAR (session 15) only loaded the dropdown options; we never saw a filter actually applied. Unblocks `list_past_visits(provider="...")`-style queries.
 - **Live-verify the `send_message` commit path** next time you actually need to message a provider. Today only the preview path was hit live; the GetComposeId / SaveDraft / Send chain is theoretical-correct + unit-tested but not yet exercised against Kaiser. Tail `~/.openkp/audit.log` from the dev session before you fire `confirm=True` so events stream live.
 - Verify the DELIVERED transition for the chlorthalidone order from session 11 next time you're in OpenKP. The order number sits in `docs/research/captures/kp-refill-2-with-order-details.har` (gitignored) and the SHIPPED state is already snapshot in session-13.md. The remaining unknowns are the carrier-tracking-attached state and the DELIVERED transition.
 - Live-verify `list_messages(deep_search=True)` from Cowork. The download tool was end-to-end verified in session 12, but the deep_search code path wasn't called explicitly — Cowork-Claude effectively reproduced the algorithm manually with `before_iso` walking.
@@ -62,7 +65,8 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
 ## Read these first
 
 - `DESIGN.md` — vision, principles, architecture, roadmap, tool inventory, safety patterns. Single source of truth.
-- `docs/recon/session-14.md` — most recent session: send_message ships (preview live-verified) plus list_message_recipients + list_message_topics. Includes the live-discovered topic catalog and the parser-loop story (envelope was `topicList` with `displayName`, not `topics` with `title`).
+- `docs/recon/session-15.md` — most recent session: list_appointments + list_past_visits ship + live-verified, with the page_size discovery from a follow-up filter HAR.
+- `docs/recon/session-14.md` — send_message ships (preview live-verified) plus list_message_recipients + list_message_topics. Includes the live-discovered topic catalog and the parser-loop story (envelope was `topicList` with `displayName`, not `topics` with `title`).
 - `docs/recon/session-13.md` — track_refill_order shipped (read sibling to request_refill).
 - `docs/recon/session-12.md` — download_message_attachment + list_messages(deep_search=True) shipped to close the genetic-info retrieval flow.
 - `docs/recon/session-11.md` — the request_refill ship and Phase 3 opening narrative.
