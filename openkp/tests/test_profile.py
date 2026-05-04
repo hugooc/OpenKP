@@ -69,7 +69,7 @@ def _sample_payload() -> dict:
                             "street2": "Apt 2",
                             "city": "Oakland",
                             "state": "CA",
-                            "postalCode": 902100000,
+                            "postalCode": 902101234,
                             "preferredIn": False,
                         },
                     ],
@@ -101,14 +101,14 @@ def _sample_payload() -> dict:
                     ],
                     "emailAddresseInfos": [],
                 },
-                "dateOfBirth": "1966-07-04",
+                "dateOfBirth": "1970-01-01",
                 "age": 59.0,
                 "gender": "M",
                 "areaOfCareInfos": [
-                    {"guid": 1234567, "mrn": 14776978, "areaOfCare": "NCA", "role": "PRI"},
+                    {"guid": 1234567, "mrn": 12345678, "areaOfCare": "NCA", "role": "PRI"},
                 ],
                 "membershipAccountInfo": {
-                    "accountId": 14776978,
+                    "accountId": 12345678,
                     "region": "NCA",
                     "planInfos": [
                         {
@@ -138,11 +138,11 @@ def test_parse_happy_path_demographics():
     assert p.middle_name == "Q"
     assert p.last_name == "Sample"
     assert p.preferred_name == "Jane"
-    assert p.date_of_birth == "1966-07-04"
+    assert p.date_of_birth == "1970-01-01"
     assert p.age == 59
     assert p.gender == "M"
     assert p.email == "jane@example.com"
-    assert p.mrn == "14776978"
+    assert p.mrn == "12345678"
     assert p.guid == "1234567"
     assert p.region == "NCA"
 
@@ -201,7 +201,7 @@ def test_parse_handles_mrn_fallback_to_account_id():
     # Remove areaOfCareInfos; MRN should fall back to membershipAccountInfo.accountId
     payload["UserAccountData"]["ebizAccountsWithPersonInfos"]["areaOfCareInfos"] = []
     p = _parse_profile(payload)
-    assert p.mrn == "14776978"
+    assert p.mrn == "12345678"
 
 
 def test_parse_handles_guid_fallback_to_area_of_care():

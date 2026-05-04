@@ -144,7 +144,7 @@ __RequestVerificationToken: <token from /mychartcn/Home/CSRFToken>
       "hasUrgentMsgs": false,
       "userKeys": ["WP-24..."],
       "viewerKeys": ["WP-24..."],
-      "userOverrideNames": {"WP-24...": "DR. ANDREA PROVIDERONE"},
+      "userOverrideNames": {"WP-24...": "DR. EXAMPLE PROVIDER"},
       "organizationId": "WP-24...",
       "messages": [
         {
@@ -152,13 +152,13 @@ __RequestVerificationToken: <token from /mychartcn/Home/CSRFToken>
           "isUnread": true,
           "deliveryInstantISO": "2025-10-02T12:30:00Z",
           "body": "<p>HTML body...</p>",
-          "author": {"displayName": "DR. ANDREA PROVIDERONE", "empKey": "WP-24..."},
+          "author": {"displayName": "DR. EXAMPLE PROVIDER", "empKey": "WP-24..."},
           "attachments": []
         }
       ]
     }
   ],
-  "users": {"WP-24...": {"name": "DR. ANDREA PROVIDERONE", "providerId": "..."}},
+  "users": {"WP-24...": {"name": "DR. EXAMPLE PROVIDER", "providerId": "..."}},
   "viewers": {"WP-24...": {"name": "PATIENT NAME", "isSelf": true}}
 }
 ```
@@ -519,7 +519,7 @@ back in subsequent SaveDraft / Send bodies):**
 
 ```json
 {
-  "displayName": "PROVIDER ONE MD",
+  "displayName": "DR. EXAMPLE PROVIDER",
   "userId":      "WP-…",
   "poolId":      "",
   "providerId":  "WP-…",
@@ -559,7 +559,7 @@ The MyChart UI fires this on every keystroke — OpenKP fires it once.
 ```json
 {
   "recipient": {
-    "displayName": "PROVIDER ONE MD",
+    "displayName": "DR. EXAMPLE PROVIDER",
     "userId":      "WP-…",
     "poolId":      "",
     "providerId":  "WP-…",

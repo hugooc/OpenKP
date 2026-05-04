@@ -268,7 +268,7 @@ def _profile_with_full_contact() -> Profile:
         middle_name="",
         email="fake@example.com",
         guid=_FAKE_GUID,
-        mrn="14776978",
+        mrn="12345678",
         addresses=[
             Address(
                 type="MAILING",

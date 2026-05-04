@@ -79,7 +79,7 @@ ORDER_DETAILS_URL = f"{BFF_HOST}{ORDER_DETAILS_PATH}"
 DELIVERY_METHOD_MAIL = "M"
 DELIVERY_METHOD_LABEL = "Mail order"
 
-# Insurance plans observed in Hugo's capture. KP echoes these into both
+# Insurance plans observed in our reference capture. KP echoes these into both
 # request bodies. Sending verbatim is the safest path until we see another
 # member's data shape.
 DEFAULT_INSURANCE_PLANS = ["COMMERCIAL", "MFAP", "CASH"]
@@ -568,7 +568,7 @@ async def _fetch_wallet(client: KaiserRequest, guid: str) -> CardOnFile | None:
               "accountType": "creditcard",
               "billingAddress": "",                  # empty STRING, not a sub-object
               "cardType": "American Express",        # full name, NOT "AM" code
-              "ccName": "Test Patient",
+              "ccName": "Fake Person",
               "ccNumber": "2000",                    # last-4
               "expDate": "2802",                     # YYYYMM format
               "firstName": "...",

@@ -1,6 +1,6 @@
 # Refill endpoints
 
-Source HAR: `docs/research/captures/kp-refill-1.har`, 2026-04-25 (Hugo's real metoprolol mail-order refill, captured live).
+Source HAR: `docs/research/captures/kp-refill-1.har`, 2026-04-25 (real mail-order refill, captured live).
 Confirmation page screenshot: `docs/research/captures/kp-refill-1-confirmation.png` (referenced from session 11).
 
 This is the **first Phase 3 write tool** — `request_refill(medication_id)` — and surfaces design decisions that don't apply to any of the read tools.
@@ -8,7 +8,7 @@ This is the **first Phase 3 write tool** — `request_refill(medication_id)` —
 ## v1 scope (locked 2026-04-25)
 
 **Mail-order only.** `request_refill` ships supporting `deliveryMethod: "M"` exclusively in v1. Local pickup (`deliveryMethod: "L"` or its own `placeorderLocal` variant) is **deferred to v2** because:
-- Hugo's typical refill pattern is mail-order, so the v1 capture path is the one we have.
+- The reference patient's typical refill pattern is mail-order, so the v1 capture path is the one we have.
 - Mail-order avoids needing in-store pharmacy selection / time-window logic.
 - Local pickup needs a separate HAR capture we don't have yet.
 
@@ -27,7 +27,7 @@ This is the **first Phase 3 write tool** — `request_refill(medication_id)` —
 | 5 | `POST .../pharmacy-center-kpweb-bff/v1/cart/prescription` | POST | Add prescription to cart | ✅ Captured |
 | 6 (mail only) | `POST .../pharmacy-center-kpweb-bff/v1/rxdeliveryeligibility` | POST | Validate delivery to patient zip | ✅ Captured (response 54b, elided) |
 | 7 | `POST .../rx-place-order-bff/v1/placeorderMail` | POST | **Commit the refill** | ✅ Captured |
-| 7 (alt) | `POST .../rx-place-order-bff/v1/placeorder*` for local pickup | POST | Commit refill to local pharmacy counter | ⚪ Not captured. Hugo did mail order. Need a fresh HAR for in-store pickup. |
+| 7 (alt) | `POST .../rx-place-order-bff/v1/placeorder*` for local pickup | POST | Commit refill to local pharmacy counter | ⚪ Not captured. Reference capture is mail order only. Need a fresh HAR for in-store pickup. |
 
 MCP tool registered (target): `request_refill(medication_id, delivery_method)`. Returns an `OrderConfirmation` with `order_number`, `placed_at`, `delivery_method`, and per-Rx `response_code`.
 
@@ -284,7 +284,7 @@ These shapes were not visible in the first HAR. Code in `refill.py` is now drive
       "accountType": "creditcard",
       "billingAddress": "",                  // empty STRING, not a sub-object
       "cardType": "American Express",        // full name, NOT the 2-letter code
-      "ccName": "Test Patient",
+      "ccName": "Fake Person",
       "ccNumber": "2000",                    // last-4 of card
       "defaultOption": "true",
       "expDate": "2802",                     // YYMM format (year-then-month, 4 digits)
@@ -432,7 +432,7 @@ x-benefitsIndicator-feature: false
 
 ### Status transitions (only `INPROGRESS` captured)
 
-`orderStatus` is API-side and presumably cycles `INPROGRESS` → `SHIPPED` (with `trackingId` populated) → `DELIVERED`. `digitalStatus` is the UI-friendly mirror ("In Progress" → presumably "Shipped" / "Delivered"). Surface both — `orderStatus` for programmatic checks, `digitalStatus` for human display. Live-verify the `SHIPPED` branch when Hugo's next mail order ships.
+`orderStatus` is API-side and presumably cycles `INPROGRESS` → `SHIPPED` (with `trackingId` populated) → `DELIVERED`. `digitalStatus` is the UI-friendly mirror ("In Progress" → presumably "Shipped" / "Delivered"). Surface both — `orderStatus` for programmatic checks, `digitalStatus` for human display. Live-verify the `SHIPPED` branch on the next real mail order.
 
 ### Out of scope
 

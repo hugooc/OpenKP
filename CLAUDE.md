@@ -50,7 +50,7 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
 2. **`reply_to_message(thread_id, body)`** — natural sibling to `send_message`. Needs a fresh HAR capture (the "Reply" button on an opened thread almost certainly hits a different endpoint than compose). Lower-risk than `send_message` because we're not picking a recipient — the thread already names one.
 
 3. **`send_message` polish from session 14 review:**
-   - **PCP role label fallback:** Provider One's `role` came back null because her `specialty` and `pcpTypeDisplayName` are empty strings. Derive `"Primary Care"` from `recipientType == 1` so the UI/caller has something to display.
+   - **PCP role label fallback:** the PCP recipient row's `role` came back null because `specialty` and `pcpTypeDisplayName` were empty strings. Derive `"Primary Care"` from `recipientType == 1` so the UI/caller has something to display.
    - **OOC awareness:** the recipient catalog carries `oocDateISO` and `oocContextString` for providers who are out of office. Surface those as fields on `MessageRecipient` so the preview can flag "your provider is out of office until X" before the user commits.
    - **`body_preview` rename or cap:** today's field name suggests truncation but the implementation only truncates above 200 chars. Either rename to `body` (full echo always) or always cap with `...` suffix when longer.
 

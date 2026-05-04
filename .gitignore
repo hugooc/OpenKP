@@ -21,6 +21,11 @@ docs/research/captures/
 docs/research/**/*.har
 docs/research/**/*.json.phi
 
+# Recon journals are dev artifacts that contain real account data.
+# Live in ~/Desktop/OpenKP Documentation/recon/ instead. Existing tracked
+# journals will be expunged from git history before public release.
+docs/recon/
+
 # Python (in case anything leaks outside openkp/)
 __pycache__/
 *.py[cod]

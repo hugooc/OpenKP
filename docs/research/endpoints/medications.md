@@ -86,7 +86,7 @@ server-side requirement.
 Chrome DevTools dropped the response body for every JSON BFF call in this
 capture (`content.text == null` despite non-zero `content.size`, no
 `content-encoding`). This is a known DevTools quirk with certain CORS
-responses. Hugo pasted the rxDetails response separately into
+responses. The rxDetails response was extracted separately into
 `docs/research/captures/rxDetails-all.json`.
 
 Bodies we still need if we ever surface these endpoints:
@@ -121,9 +121,9 @@ away, no special handling needed.
   },
   "member": {
     "guid": "1234567",
-    "mrn": "14776978",
-    "firstName": "HUGO",
-    "lastName": "TESTLAST",
+    "mrn": "12345678",
+    "firstName": "JANE",
+    "lastName": "SAMPLE",
     "shipToState": "CA",
     "InsurancePlans": ["COMMERCIAL", "MFAP", "CASH"],
     "isM3PMem": false,
@@ -131,7 +131,7 @@ away, no special handling needed.
   },
   "prescriptions": {
     "rxRefillResponse": true,
-    "rxcomid": "72556778",
+    "rxcomid": "<rxcomid>",
     "lastDispensedNDCs": ["00378022201", "70010078301", ...],
     "pickUpReadyDispenseLocCodes": [],
     "recentRefillableCount": 2,
@@ -151,7 +151,7 @@ away, no special handling needed.
 | `medicineName` | str | Internal name, e.g. `"CHLORTHALID 25 MG TAB MYLA"`. Capitalization is inconsistent across Rx (some all-caps, some title case). |
 | `commonBrandName` | str | Brand name, e.g. `"HYGROTON"`. |
 | `consumerInstructions` | str | Sig text, e.g. `"Take 1 tablet by mouth daily"`. |
-| `consumerName` | str | Prescriber, e.g. `"PROVIDER TWO MD"`. |
+| `consumerName` | str | Prescriber, e.g. `"DR. EXAMPLE PROVIDER"`. |
 | `prescribedOn` | str | Initial Rx date, US format `"01/26/2026"`. |
 | `lastRefillDate` | str | Last refill, US format OR literal `"N/A"` for never-filled. |
 | `lastSoldDate` | str/null | When patient picked it up. Null if not yet sold. |

@@ -401,7 +401,7 @@ def _parse_pcp(payload: dict[str, Any]) -> Provider | None:
         {
           "ProvidersList": [
             {
-              "Name": "PROVIDER ONE MD",
+              "Name": "DR. EXAMPLE PROVIDER",
               "Specialty": "Family Practice",
               "Relation": "Primary Care Provider",
               "WebPageUrl": "https://mydoctor.kaiserpermanente.org/...",
