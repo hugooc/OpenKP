@@ -62,7 +62,34 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
 - **Live-verify the `send_message` commit path** next time you actually need to message a provider. Today only the preview path was hit live; the GetComposeId / SaveDraft / Send chain is theoretical-correct + unit-tested but not yet exercised against Kaiser. Tail `~/.openkp/audit.log` from the dev session before you fire `confirm=True` so events stream live.
 - Verify the DELIVERED transition for the chlorthalidone order from session 11 next time you're in OpenKP. The order number sits in `docs/research/captures/kp-refill-2-with-order-details.har` (gitignored) and the SHIPPED state is already snapshot in session-13.md. The remaining unknowns are the carrier-tracking-attached state and the DELIVERED transition.
 - Live-verify `list_messages(deep_search=True)` from Cowork. The download tool was end-to-end verified in session 12, but the deep_search code path wasn't called explicitly — Cowork-Claude effectively reproduced the algorithm manually with `before_iso` walking.
-- Spot-check whether MyChart "Documents" / "Visit Notes" / "After Visit Summary" sections hold reports OpenKP doesn't reach. Session 12 confirmed genetic panels can come through messages, but other scanned reports (letters, outside records) might live elsewhere.
+- ~~Spot-check whether MyChart "Documents" / "Visit Notes" / "After Visit Summary" sections hold reports OpenKP doesn't reach.~~ **Confirmed yes 2026-05-06** — Document Center is a separate surface (`LoadOtherDocuments`, plus a new `ddm/getdocumentsbff` BFF). See `docs/research/endpoints/documents.md`.
+
+## New surfaces mapped 2026-05-06 (no bodies yet, no tools shipped)
+
+A "click around with DevTools open" capture session surfaced three new data
+domains that weren't on our radar. None implemented; all worth recording before
+the threads go cold. Response bodies were stripped from the HARs by Chrome's
+export (large-payload truncation), so each needs a fresh capture before
+implementation.
+
+- **Billing & Coverage** — five new BFFs on `apims.kaiserpermanente.org`
+  (balance, coverage, guarantor, member-transition, notification prefs).
+  **Auth contract differs from pharmacy** — `X-appName` / `X-componentName` /
+  `X-region: HomeAndCAFH`, no `X-IBM-client-Id`, no `x-guid`. See
+  `docs/research/endpoints/billing.md`.
+- **Document Center** — `LoadOtherDocuments` (legacy) + `ddm/getdocumentsbff`
+  (new BFF). Two parallel documents surfaces, likely overlapping. Plus the
+  federal V/D/T `record-download` surface for C-CDA/PDF visit exports. See
+  `docs/research/endpoints/documents.md`.
+- **Upcoming orders** — pending labs/imaging/procedures the doctor placed but
+  the patient hasn't completed yet, with patient prep instructions. The
+  homepage "View instructions" / POTASSIUM card. New data class, pairs with
+  `list_lab_results` at the opposite end of the lifecycle. Strong tool
+  candidate. See `docs/research/endpoints/upcoming_orders.md`.
+
+**BFF heterogeneity warning** added to `docs/research/endpoints/medications.md`:
+the pharmacy header set is pharmacy-specific. Each new BFF needs its own
+header capture.
 
 ## Read these first
 

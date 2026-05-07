@@ -245,3 +245,13 @@ To regenerate the recon JSONs (e.g. after a Kaiser response-shape change):
 Outputs to `docs/research/captures/recon-appointments-{header,pending,upcoming,past}.json` — gitignored, contain PHI.
 
 HAR captures (`kp-appointments*.har`) are useful for the request side but unreliable for response bodies because Chrome's DevTools evicts old response payloads before export. Prefer the recon script for response-shape mapping.
+
+## Adjacent endpoints worth noting
+
+Discovered 2026-05-06 from `kp-capture-various-with-phi.har`:
+
+- `GET /mychartcn/Visits/VisitDetails/GetCalendarFile?csn=<csn>&details=true`
+  — returns a `.ics` calendar file for one appointment. Tiny, easy tool
+  candidate: `download_appointment_ics(csn)` would let users add a KP
+  appointment to their calendar app of choice. The `csn` is the same Epic
+  handle already exposed by `list_appointments`.

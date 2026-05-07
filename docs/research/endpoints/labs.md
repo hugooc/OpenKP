@@ -291,3 +291,19 @@ chars.
   that actually have inline scans is unknown.
 - **`GetDocumentGenerationInfo` status values.** Observed `"Generated"`.
   Other values ("Pending", "Failed"?) are plausible but unconfirmed.
+
+## Adjacent endpoints worth noting
+
+Discovered 2026-05-06 from `kp-capture-various-with-phi.har` while clicking
+around the Test Results page. Not used by current tools but candidates for
+future work:
+
+- `POST /mychartcn/api/test-results/GetResultsReleasePreferences` body `{}`
+  — read user preferences for **when** test results are auto-released to
+  MyChart (some patients delay release until after their doctor reviews).
+  ~163 B response.
+- `POST /mychartcn/api/test-results/SetResultsReleasePreferences` — write
+  side. **A real Phase 3 write-tool candidate**: `set_results_release_preference()`.
+  Same audit/confirm pattern as `request_refill` would apply.
+- `POST /mychartcn/api/test-results/GetCommunityInfo` — likely a
+  cross-organization Epic federation lookup. Not investigated.

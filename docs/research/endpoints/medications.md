@@ -81,6 +81,27 @@ The browser also sends an OPTIONS preflight for each unique URL. Our httpx
 client can skip preflights — they're a browser-only enforcement of CORS, not a
 server-side requirement.
 
+### ⚠️ BFF auth is heterogeneous — don't assume this contract ports
+
+The pharmacy BFF contract above is **specific to the pharmacy microservices**.
+Other BFFs on `apims.kaiserpermanente.org` use entirely different header sets.
+Discovered 2026-05-06 from `kp-capture-various-with-phi.har`:
+
+- **Bills/coverage BFF** (`bills-claims-ui` / MCC) uses `X-appName` +
+  `X-componentName` + `X-region: HomeAndCAFH` + `X-useragentcategory` +
+  `X-useragenttype`. **No `X-IBM-client-Id`. No `x-guid`. No `X-KPSessionID`.**
+- **Digital identity BFF** (`coverage-banner` / Paperless Banner) uses
+  `x-appName` + `x-featureName` + `x-ibm-client-id` (different ID than
+  pharmacy) + `x-mobileRequest` + `x-osversion` + `x-s` +
+  `x-useragentcategory` + `x-useragenttype`.
+- **Document Distribution BFF** (`ddm/getdocumentsbff`) appears to use
+  cookies + Origin/Referer only, no `X-` headers. Confirmation pending fresh
+  capture (HAR-export sanitization possible).
+
+**Lesson for future BFF tools:** capture headers per BFF. Don't reuse the
+pharmacy header set blindly. Even the `x-region` sentinel changes
+(`MRN` for pharmacy, `HomeAndCAFH` for bills). See `billing.md` for details.
+
 ## HAR limitations
 
 Chrome DevTools dropped the response body for every JSON BFF call in this
