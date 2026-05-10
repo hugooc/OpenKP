@@ -13,16 +13,10 @@ import pytest
 
 from openkp.scrapers.csrf import CSRF_PATH
 from openkp.scrapers.labs import (
-    DEFAULT_DOWNLOAD_DIR,
     DETAILS_PATH,
-    DOCDETAILS_PATH,
-    DOCGEN_PATH,
     LIST_PATH,
     PAGE_PATH,
-    RESULT_TYPE_LAB,
-    LabComponent,
     LabPdfDownload,
-    LabResult,
     LabResultDetail,
     _fetch_page_nonce,
     _html_to_text,

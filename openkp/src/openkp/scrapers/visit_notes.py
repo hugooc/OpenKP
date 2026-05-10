@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +90,7 @@ class VisitNote(BaseModel):
     """One clinical note (or the synthetic AVS entry) for a past visit."""
 
     note_type: str | None = None        # "Progress Notes", "Operative Note", "After Visit Summary", ...
-    iso: str | None = None              # ISO timestamp from Kaiser, e.g. "2025-12-04T13:36:47-08:00"
+    iso: str | None = None              # ISO-8601. Clinical notes carry full timestamp ("2025-12-04T13:36:47-08:00"); AVS carries date-only ("2025-12-04") since Kaiser only returns a display date for the visit summary.
     is_addendum: bool = False
     is_sensitive: bool = False
     provider_name: str | None = None
@@ -234,7 +235,7 @@ async def fetch_visit_notes(client: KaiserRequest, csn: str) -> VisitNotesRespon
     if avs_html:
         avs_note = VisitNote(
             note_type="After Visit Summary",
-            iso=_str_or_none(summary.get("encounterDate")),
+            iso=_display_date_to_iso(summary.get("encounterDate")),
             content_text=_html_to_text(avs_html),
             content_html=avs_html,
         )
@@ -483,3 +484,21 @@ def _str_or_none(value: Any) -> str | None:
         return None
     s = str(value).strip()
     return s or None
+
+
+def _display_date_to_iso(value: Any) -> str | None:
+    """Parse Kaiser's encounter-date display string into a date-only ISO.
+
+    Kaiser returns `encounterDate` as a display string like "Dec 04, 2025" on
+    the visit summary surface. The clinical-notes path returns proper ISO
+    timestamps in `noteList[i].iso`, so the AVS branch needs to convert to
+    keep `VisitNote.iso` honest. Returns None if the string doesn't match
+    the expected `%b %d, %Y` format.
+    """
+    s = _str_or_none(value)
+    if s is None:
+        return None
+    try:
+        return datetime.strptime(s, "%b %d, %Y").date().isoformat()
+    except ValueError:
+        return None

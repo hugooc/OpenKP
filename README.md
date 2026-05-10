@@ -1,5 +1,7 @@
 # OpenKP
 
+[![CI](https://github.com/testuser/OpenKP/actions/workflows/ci.yml/badge.svg)](https://github.com/testuser/OpenKP/actions/workflows/ci.yml)
+
 A patient-directed MCP server that lets Claude read and act on your Kaiser Permanente medical record using your own credentials, on your own Mac.
 
 ```
@@ -55,7 +57,7 @@ The full list lives in `DESIGN.md` §2. The three that matter most:
 
 ## Status
 
-Phase 2 (read-only) is closed. Phase 3 (writes) is in progress. As of 2026-05-04: 22 MCP tools registered, 525 tests passing, run with `cd openkp && .venv/bin/pytest -q`. Per-tool status (live-verified, preview-only, deferred) is documented in `openkp/README.md`.
+Phase 2 (read-only) is closed. Phase 3 (writes) is in progress. As of 2026-05-04: 22 MCP tools registered, 527 tests passing, run with `cd openkp && .venv/bin/pytest -q`. Per-tool status (live-verified, preview-only, deferred) is documented in `openkp/README.md`.
 
 ## License
 

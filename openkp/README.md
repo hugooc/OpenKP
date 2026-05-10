@@ -9,7 +9,7 @@ Inspired by [Open Record](https://github.com/Fan-Pier-Labs/openrecord) by Ryan H
 **Phase 2 (read-only) closed. Phase 3 (writes) in progress.** As of 2026-05-04:
 
 - **22 MCP tools** registered: 3 housekeeping, 17 reads, 2 writes (mail-order refill, non-urgent message).
-- **525 tests** passing.
+- **527 tests** passing.
 - **NorCal region only** — see "Regional support" below.
 
 Live-verified end-to-end against real Kaiser data: profile, messages, lab results (incl. PDF download), medications, problems, allergies, appointments (upcoming + past), visit notes, AVS, refill *preview*, send-message *preview*, refill order tracking. Commit paths for `request_refill` and `send_message` are unit-tested but not yet exercised live; see the "Write tools — preview vs commit" section.
@@ -95,7 +95,7 @@ From `~/OpenKP/openkp`:
 .venv/bin/pytest -q
 ```
 
-You should see `525 passed`. If anything fails, stop and investigate before going further.
+You should see `527 passed`. If anything fails, stop and investigate before going further.
 
 ### 4. First authenticated run (one-time, ~2 minutes)
 
@@ -226,7 +226,7 @@ openkp/
 ├── scripts/
 │   └── recon_*.py              ← per-endpoint reconnaissance scripts
 └── tests/
-    └── test_*.py               ← 525 tests, mock httpx via _patch_http
+    └── test_*.py               ← 527 tests, mock httpx via _patch_http
 ```
 
 ## Privacy

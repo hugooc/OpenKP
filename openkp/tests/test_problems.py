@@ -14,7 +14,6 @@ from openkp.scrapers.csrf import CSRF_PATH
 from openkp.scrapers.problems import (
     LIST_PATH,
     PAGE_REFERER,
-    Problem,
     ProblemsResponse,
     _int_or_none,
     _parse_problem,

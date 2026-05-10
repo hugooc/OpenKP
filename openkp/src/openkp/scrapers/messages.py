@@ -24,6 +24,7 @@ Docs: `docs/research/endpoints/messages.md`
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -486,8 +487,10 @@ def _parse_conversation_list(payload: Any, *, folder_tag: int | None) -> list[Me
     if not isinstance(convs, list):
         return []
 
-    users = payload.get("users") if isinstance(payload.get("users"), dict) else {}
-    viewers = payload.get("viewers") if isinstance(payload.get("viewers"), dict) else {}
+    users_raw = payload.get("users")
+    users: dict[str, Any] = users_raw if isinstance(users_raw, dict) else {}
+    viewers_raw = payload.get("viewers")
+    viewers: dict[str, Any] = viewers_raw if isinstance(viewers_raw, dict) else {}
 
     out: list[MessageThread] = []
     for conv in convs:
@@ -512,9 +515,12 @@ def _parse_conversation_details(payload: Any) -> MessageThreadDetail | None:
     if thread_id is None:
         return None
 
-    users = payload.get("users") if isinstance(payload.get("users"), dict) else {}
-    viewers = payload.get("viewers") if isinstance(payload.get("viewers"), dict) else {}
-    overrides = payload.get("userOverrideNames") if isinstance(payload.get("userOverrideNames"), dict) else {}
+    users_raw = payload.get("users")
+    users: dict[str, Any] = users_raw if isinstance(users_raw, dict) else {}
+    viewers_raw = payload.get("viewers")
+    viewers: dict[str, Any] = viewers_raw if isinstance(viewers_raw, dict) else {}
+    overrides_raw = payload.get("userOverrideNames")
+    overrides: dict[str, Any] = overrides_raw if isinstance(overrides_raw, dict) else {}
 
     summary = _parse_thread_summary(payload, users=users, viewers=viewers, folder_tag=None)
     if summary is None:
@@ -525,7 +531,8 @@ def _parse_conversation_details(payload: Any) -> MessageThreadDetail | None:
     if isinstance(reply_flags, dict):
         can_reply = bool(reply_flags.get("canReply"))
 
-    messages_raw = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+    raw_messages = payload.get("messages")
+    messages_raw: list[Any] = raw_messages if isinstance(raw_messages, list) else []
     messages = [
         m for m in (_parse_message(raw, users=users, viewers=viewers, overrides=overrides) for raw in messages_raw)
         if m is not None
@@ -553,7 +560,8 @@ def _parse_thread_summary(
     if thread_id is None:
         return None
 
-    overrides = conv.get("userOverrideNames") if isinstance(conv.get("userOverrideNames"), dict) else {}
+    overrides_raw = conv.get("userOverrideNames")
+    overrides: dict[str, Any] = overrides_raw if isinstance(overrides_raw, dict) else {}
 
     tags = conv.get("tags")
     tag_set = set(tags.keys()) if isinstance(tags, dict) else set()
@@ -566,7 +574,8 @@ def _parse_thread_summary(
     if isinstance(messages_raw, list) and messages_raw:
         latest = messages_raw[0] if isinstance(messages_raw[0], dict) else {}
         last_message_at = _str_or_none(latest.get("deliveryInstantISO"))
-        author = latest.get("author") if isinstance(latest.get("author"), dict) else {}
+        author_raw = latest.get("author")
+        author: dict[str, Any] = author_raw if isinstance(author_raw, dict) else {}
         # Authors in the inline message carry a direct displayName, which is
         # the most reliable source. Fall back to user-key resolution.
         last_sender = _str_or_none(author.get("displayName"))
@@ -1401,16 +1410,38 @@ def _build_viewers_payload(recipient: MessageRecipient) -> list[dict[str, str]]:
     return [{"wprId": wpr_id}]
 
 
+DEBUG_DUMPS_ENV = "OPENKP_DEBUG_DUMPS"
+
+
+def _debug_dumps_enabled() -> bool:
+    """True when OPENKP_DEBUG_DUMPS is set to a truthy value.
+
+    Truthy: "1", "true", "yes", "on" (case-insensitive). Anything else,
+    including unset, is False.
+    """
+    return os.getenv(DEBUG_DUMPS_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _debug_dump_payload(kind: str, payload: Any) -> None:
-    """One-shot diagnostic: dump an unrecognized response to ~/.openkp/.
+    """Diagnostic: dump an unrecognized response to ~/.openkp/, opt-in only.
 
     When `_parse_topics` or `_parse_recipients` returns empty, the response
-    shape didn't match anything we expected. Saves the raw payload to a
-    timestamped file so the next session can update the parser. Best-effort:
-    swallows IO errors silently — diagnostics must never break the tool.
+    shape didn't match anything we expected. The recipients payload names the
+    user's care team — PHI-adjacent — so dumping is gated behind
+    OPENKP_DEBUG_DUMPS. Without that env var set, this just logs a one-line
+    warning so the operator knows the parser missed something.
 
-    Output path: ~/.openkp/debug-<kind>-<utc-timestamp>.json
+    Best-effort: swallows IO errors silently — diagnostics must never break
+    the tool.
+
+    Output path (when enabled): ~/.openkp/debug-<kind>-<utc-timestamp>.json
     """
+    if not _debug_dumps_enabled():
+        logger.warning(
+            "Parser returned empty for %s; set %s=1 to capture the raw payload",
+            kind, DEBUG_DUMPS_ENV,
+        )
+        return
     try:
         import json as _json
         target = Path.home() / ".openkp" / f"debug-{kind}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"

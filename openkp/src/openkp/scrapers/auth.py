@@ -141,7 +141,10 @@ async def login_interactive(data_dir: Path, username: str, password: str) -> Kai
                     logger.info("Persistent profile already holds a live session")
 
             logger.info("Login complete at %s", page.url)
-            cookies = await context.cookies()
+            # Playwright returns list[Cookie] (TypedDict); convert to plain
+            # list[dict] so the rest of OpenKP doesn't take a Playwright type
+            # dependency.
+            cookies: list[dict] = [dict(c) for c in await context.cookies()]
             user_agent = await page.evaluate("() => navigator.userAgent")
             _log_cookie_names(cookies)
 

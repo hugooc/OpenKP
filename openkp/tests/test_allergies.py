@@ -19,7 +19,6 @@ from openkp.scrapers.allergies import (
     LIST_PATH,
     PAGE_REFERER,
     AllergiesResponse,
-    Allergy,
     _interpret_status,
     _parse_allergies_response,
     _parse_allergy,

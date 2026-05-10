@@ -521,7 +521,7 @@ def _parse_components(raw: Any) -> list[LabComponent]:
         comments = item.get("componentComments") or {}
 
         flag = _str_or_none(result_info.get("abnormalFlagCategoryValue"))
-        is_abnormal = bool(flag) and flag.lower() not in _NON_ABNORMAL_FLAGS
+        is_abnormal = flag is not None and flag.lower() not in _NON_ABNORMAL_FLAGS
 
         numeric = result_info.get("numericValue")
         numeric_value = _float_or_none(numeric)

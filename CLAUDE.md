@@ -40,7 +40,7 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
   - `download_message_attachment` ✅ shipped + live-verified 2026-04-25 (session 12). Two-step chain (`GetDocumentDetailsLegacy` → binary GET). Saves to `~/.openkp/downloads/`. Genetic panels and other clinically important documents arrive as message attachments — Kaiser doesn't surface them in test-results.
   - `list_messages(deep_search=True, max_pages=30)` ✅ shipped + live-verified 2026-04-25 (session 12). Walks pagination via `localSummary.oldestSearchedInstantISO` because Kaiser's `searchQuery` is page-scoped, not index-scoped (default search misses anything older than the most recent ~50 threads). Use this when looking for archival messages. See `docs/research/endpoints/messages.md` "Search" section and `docs/recon/session-12.md`.
 
-**Tests:** 525 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+**Tests:** 527 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
 
 ## Next session: start here
 

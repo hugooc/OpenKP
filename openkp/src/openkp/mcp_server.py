@@ -3,9 +3,6 @@
 Exposes Kaiser Permanente patient-portal actions as MCP tools so Claude can
 read and (eventually) write to your medical record.
 
-Current state: skeleton. Only the `ping` and `whoami` tools work. Real tools
-arrive once the auth layer is live.
-
 Run directly:
     python -m openkp.mcp_server
 
@@ -21,6 +18,9 @@ Connect from Claude Desktop by adding this to your MCP config:
         }
       }
     }
+
+The full tool inventory lives in `openkp/README.md`. See `DESIGN.md` for the
+write-tool preview/commit pattern and audit-log contract.
 """
 
 from __future__ import annotations

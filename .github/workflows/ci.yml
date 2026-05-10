@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same branch — saves CI minutes when pushing
+# multiple commits in a row.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: lint + typecheck + test (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: openkp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: openkp/pyproject.toml
+
+      - name: Install package + dev extras
+        # Note: we deliberately do NOT run `playwright install chromium` —
+        # the test suite mocks httpx and never launches a browser, so the
+        # 300MB binary download is pure waste in CI. The auth.py module
+        # imports playwright at module level, but importing the Python
+        # package alone is fine; only context.cookies() needs a real browser.
+        run: pip install -e ".[dev]"
+
+      - name: ruff
+        run: ruff check .
+
+      - name: mypy
+        run: mypy src/openkp
+
+      - name: pytest
+        run: pytest -q

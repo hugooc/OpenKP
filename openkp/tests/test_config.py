@@ -1,6 +1,5 @@
 """Smoke tests for openkp.config."""
 
-import os
 
 import pytest
 

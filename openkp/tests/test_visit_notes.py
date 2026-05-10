@@ -10,16 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from openkp.scrapers.csrf import CSRF_PATH
 from openkp.scrapers.visit_notes import (
-    AVS_REPORT_MNEMONIC,
-    DOCDETAILS_PATH,
-    GET_NOTES_PATH,
-    LOAD_REPORT_PATH,
     VALIDATE_NOTE_PATH,
     VISIT_DETAILS_PATH,
     AvsPdfDownload,
-    VisitNote,
     VisitNotesResponse,
     _extract_avs_dcs_id,
     _html_to_text,
@@ -373,6 +367,7 @@ async def test_fetch_visit_notes_full_chain():
     assert response.after_visit_summary is not None
     avs = response.after_visit_summary
     assert avs.note_type == "After Visit Summary"
+    assert avs.iso == "2025-01-01"  # display date "Jan 01, 2025" parsed to date-only ISO
     assert avs.content_text and "After Visit Summary" in avs.content_text
 
     # 7 HTTP calls total

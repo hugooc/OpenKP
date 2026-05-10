@@ -119,7 +119,8 @@ def _parse_allergies_response(payload: Any) -> AllergiesResponse:
     if not isinstance(payload, dict):
         return AllergiesResponse()
 
-    raw_list = payload.get("DataList") if isinstance(payload.get("DataList"), list) else []
+    data_list = payload.get("DataList")
+    raw_list: list[Any] = data_list if isinstance(data_list, list) else []
 
     allergies: list[Allergy] = []
     for entry in raw_list:

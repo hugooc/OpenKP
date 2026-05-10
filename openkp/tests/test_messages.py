@@ -15,7 +15,6 @@ from openkp.safety import DRY_RUN_ENV
 from openkp.scrapers.csrf import CSRF_PATH
 from openkp.scrapers.messages import (
     COMPOSE_ID_PATH,
-    COMPOSE_REMOVE_PATH,
     DETAILS_PATH,
     DOCDETAILS_LEGACY_PATH,
     DRAFT_SAVE_PATH,
@@ -27,12 +26,10 @@ from openkp.scrapers.messages import (
     SEND_PATH,
     SUBTOPICS_PATH,
     Attachment,
-    Message,
     MessageAttachmentDownload,
     MessageConfirmation,
     MessagePreview,
     MessageRecipient,
-    MessageThread,
     MessageThreadDetail,
     MessageTopic,
     _build_compose_payload,
@@ -1863,3 +1860,32 @@ async def test_send_message_compose_id_missing_raises_runtime_error(tmp_path: Pa
             )
     finally:
         p.stop()
+
+
+# --- debug-dump gate ---
+
+
+def test_debug_dump_disabled_by_default(monkeypatch, tmp_path: Path):
+    """Without OPENKP_DEBUG_DUMPS, parser-empty payloads must not hit disk."""
+    from openkp.scrapers import messages as messages_mod
+
+    monkeypatch.delenv("OPENKP_DEBUG_DUMPS", raising=False)
+    monkeypatch.setattr(messages_mod.Path, "home", classmethod(lambda cls: tmp_path))
+
+    messages_mod._debug_dump_payload("recipients", {"unexpected": "shape"})
+
+    debug_dir = tmp_path / ".openkp"
+    assert not debug_dir.exists() or not list(debug_dir.glob("debug-*.json"))
+
+
+def test_debug_dump_writes_when_env_set(monkeypatch, tmp_path: Path):
+    """With OPENKP_DEBUG_DUMPS=1, the raw payload lands in ~/.openkp/."""
+    from openkp.scrapers import messages as messages_mod
+
+    monkeypatch.setenv("OPENKP_DEBUG_DUMPS", "1")
+    monkeypatch.setattr(messages_mod.Path, "home", classmethod(lambda cls: tmp_path))
+
+    messages_mod._debug_dump_payload("recipients", {"unexpected": "shape"})
+
+    dumps = list((tmp_path / ".openkp").glob("debug-recipients-*.json"))
+    assert len(dumps) == 1
