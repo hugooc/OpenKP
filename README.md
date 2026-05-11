@@ -2,19 +2,32 @@
 
 [![CI](https://github.com/hugooc/OpenKP/actions/workflows/ci.yml/badge.svg)](https://github.com/hugooc/OpenKP/actions/workflows/ci.yml)
 
-A patient-directed MCP server that lets Claude read and act on your Kaiser Permanente medical record using your own credentials, on your own Mac.
+A patient-directed MCP server that bridges Claude and **Kaiser Permanente Northern California's** patient portal — letting you act on your own medical record, with your own credentials, on your own Mac.
 
 ```
 You ─►  Claude Desktop ─►  OpenKP (local) ─►  kp.org
 ```
 
-Ask Claude in plain English: *"When's my next appointment?"*, *"What did my cardiologist say at my last visit?"*, *"Refill my blood pressure medication."* OpenKP exposes 17 read tools and 2 write tools covering appointments, labs, messages, medications, problems, allergies, demographics, visit notes, and after-visit summaries.
+The kind of question OpenKP makes possible — one a patient portal structurally cannot answer:
+
+> *"Read every visit note from the last two years. Find every instance where I raised a concern, asked a question, or pushed back. How was it documented? Look for patterns in how my engagement gets characterized."*
+
+Kaiser's portal shows you plans, orders, and results. It doesn't show you how *you* show up in the chart. OpenKP can.
+
+This is **critical AI health literacy** in practice — patient-directed AI on patient-owned data, surfacing what institutional systems are not built to make legible. Background: ["Critical AI Health Literacy as Liberation Technology"](https://nam.edu/perspectives/critical-ai-health-literacy-as-liberation-technology-a-new-skill-for-patient-empowerment) (NAM Perspectives) and [aipatients.org](https://aipatients.org).
+
+OpenKP exposes 17 read tools and 2 write tools covering appointments, labs, messages, medications, problems, allergies, demographics, visit notes, and after-visit summaries. Other questions it can handle:
+
+- *"How many appointments did I have last year, split by virtual vs in-person?"*
+- *"Which lab values have drifted in the last 18 months?"*
+- *"Compare what my cardiologist and primary-care doctor have each written about my condition over the last three years."*
+- *"Refill my blood pressure medication."*
 
 Everything stays on your machine. There is no OpenKP server, no shared database, no remote credential store. Every Kaiser request is made by you, as you, using the same web session you'd get logging into kp.org by hand.
 
 ## Who this is for
 
-Technically curious Kaiser Permanente members who:
+Technically curious **Kaiser Permanente Northern California** members who:
 
 - Have Claude Desktop installed (or are willing to install it).
 - Are comfortable running a few terminal commands, or have Claude Code on hand to walk them through it.

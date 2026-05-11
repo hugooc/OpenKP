@@ -1,6 +1,6 @@
 # OpenKP
 
-A patient-directed MCP server that bridges Claude and Kaiser Permanente's patient portal.
+A patient-directed MCP server that bridges Claude and Kaiser Permanente Northern California's patient portal.
 
 Inspired by [Open Record](https://github.com/Fan-Pier-Labs/openrecord) by Ryan Hughes / Fan Pier Labs. Open Record targets vanilla Epic MyChart, which Kaiser is not. OpenKP implements the same idea (let Claude drive your medical record through MCP) against Kaiser's Ping-fronted portal, with independently written code.
 
@@ -25,6 +25,8 @@ The repo is private during this phase but tracks public-release readiness — se
 Kaiser's FHIR patient API is read-only and limited to USCDI. That's a policy choice, not a technical necessity. Your record contains more than what the API surfaces, and you have every right to act on it (refill meds, message your team, view labs) through any interface you choose, including an AI agent. OpenKP is that interface.
 
 This is a **personal research tool**. It logs in with your own credentials, on your own machine, and nothing leaves your laptop except requests to Kaiser.
+
+OpenKP is also a working example of **critical AI health literacy** — the practice of using AI you direct, on data you own, to make your own care legible to you. The framing comes from ["Critical AI Health Literacy as Liberation Technology"](https://nam.edu/perspectives/critical-ai-health-literacy-as-liberation-technology-a-new-skill-for-patient-empowerment) (NAM Perspectives) and [aipatients.org](https://aipatients.org).
 
 ## How it works
 
@@ -131,14 +133,19 @@ The first time, a Chromium window pops up showing the kp.org login. Sign in (inc
 
 ## First things to try
 
-Once `session_check` returns `status: alive`, try these prompts in Claude Desktop:
+Once `session_check` returns `status: alive`, try these prompts in Claude Desktop. Lead with the questions that show what OpenKP makes possible — surface insight your patient portal isn't built to give you:
 
-- **"What's my next Kaiser appointment?"** — exercises `list_appointments`.
-- **"How many Kaiser appointments did I have in 2025?"** — exercises `list_past_visits` with the `until_iso` cursor.
-- **"What did my cardiologist say at my last visit?"** — chains `list_past_visits` → `read_visit_notes` and summarizes.
-- **"What labs did I have last month?"** — exercises `list_lab_results`.
-- **"Show me my active medications."** — exercises `list_medications`.
-- **"Summarize the unread messages in my Kaiser inbox."** — exercises `list_messages` + `read_message`.
+- **"Read every visit note from the last two years. Find every time I raised a concern, asked a question, or pushed back. How was it documented?"** — chains `list_past_visits` → `read_visit_notes` across the full history. Surfaces clinician framing language patients rarely see.
+- **"Compare what each of my providers has written about my condition over the past three years. Where do they agree, where do they diverge?"** — same chain, organized by provider rather than chronologically.
+- **"Which lab values have drifted in directions worth asking about?"** — `list_lab_results` with longitudinal pattern reading.
+- **"Are there diagnoses on my problem list I don't recognize or wasn't told about?"** — `list_problems` plus your own memory.
+
+Lighter / transactional:
+
+- **"What's my next appointment?"** — exercises `list_appointments`.
+- **"How many appointments did I have last year, split by virtual vs in-person?"** — `list_past_visits` with `until_iso`.
+- **"Show me my active medications."** — `list_medications`.
+- **"Summarize the unread messages in my Kaiser inbox."** — `list_messages` + `read_message`.
 
 For write operations:
 
