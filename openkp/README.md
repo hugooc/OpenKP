@@ -22,7 +22,7 @@ The repo is private during this phase but tracks public-release readiness — se
 
 ## Why this exists
 
-Kaiser's FHIR patient API is read-only and limited to USCDI. That's a policy choice, not a technical necessity. Your record contains more than what the API surfaces, and you have every right to act on it (refill meds, message your team, view labs) through any interface you choose, including an AI agent. OpenKP is that interface.
+Kaiser's FHIR patient API is read-only and exposes only what federal interoperability rules require (a baseline called USCDI — the United States Core Data for Interoperability). That's a policy floor, not the technical ceiling. Your record contains more than what the API surfaces, and you have every right to act on it (refill meds, message your team, view labs) through any interface you choose, including an AI agent. OpenKP is that interface.
 
 This is a **personal research tool**. It logs in with your own credentials, on your own machine, and nothing leaves your laptop except requests to Kaiser.
 
