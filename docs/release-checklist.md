@@ -1,6 +1,6 @@
 # v1 public-release checklist
 
-Required steps before flipping `github.com/hugooc/OpenKP` from private to public. Status as of 2026-05-10.
+Required steps before flipping `github.com/hugooc/OpenKP` from private to public. Status as of 2026-05-11.
 
 ## 1. README polish — done 2026-05-04
 
@@ -78,7 +78,21 @@ These have always lived outside the repo (gitignored or sidecar) and will contin
 
 `openkp/LICENSE` exists with standard MIT text. The copyright line was originally "Copyright (c) 2026 Hugo Campos" but the PHI rewrite's `Hugo Campos==>Test Patient` rule also rewrote it. See item 2's "Heads up — LICENSE" note. Both READMEs reference it.
 
-## 5. Cleanup after flip-public
+## 5. Website — done 2026-05-11
+
+Static single-page landing site at [openkp.org](https://openkp.org), hosted on Cloudflare Pages. Source under `site/` (committed in `25a7259`). Codex drafted v1, two review passes aligned voice (CAIHL framing, MCP-client-agnostic at runtime, Claude Code as install assistant, lighter editorial tone in Limits). Favicon + og:image wired into `<head>`, canonical URL set, www → apex redirect via `_redirects`. No build step, no JS framework.
+
+Deploy command (run from repo root):
+
+```bash
+wrangler pages deploy site --project-name=openkp --branch=main --commit-dirty=true
+```
+
+Today the deploy is direct-upload (wrangler from local). After the PHI force-push and flip-public land, switch the Pages project to auto-deploy from GitHub (`Settings → Builds & deployments → Connect to Git`) so site edits ship on push. Until then, redeploy via wrangler each time `site/` changes.
+
+Custom domains active: `openkp.org` and `www.openkp.org`, both proxied through Cloudflare with auto-SSL. See session-20 for the operational record.
+
+## 6. Cleanup after flip-public
 
 Once the repo is public and you've verified everything is in order:
 

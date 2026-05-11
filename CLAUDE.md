@@ -19,7 +19,7 @@ What this means for current work:
 
 See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy).
 
-## Current state (2026-05-04)
+## Current state (2026-05-11)
 
 - **Phase 0 scaffold:** complete.
 - **Phase 1 auth:** complete. Silent session reuse via `~/.openkp/session.json` + httpx probe to `/mychartcn/keepalive.asp`. Interactive first-run Chromium, silent after. See ADR-005 and `docs/recon/session-2.md`.
@@ -45,6 +45,8 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
 **CI:** GitHub Actions runs ruff + mypy + pytest on push/PR (Python 3.11/3.12/3.13). See `.github/workflows/ci.yml`. Status badge in root README.
 
 **PHI history rewrite:** done locally 2026-05-10 (HEAD `57ede8e`, see session-19). All commits scrubbed of PHI in blobs and messages; `docs/recon/` removed from history. Force-push to origin + GitHub support ticket for ref GC + flip-public are still pending. Mirror backup at `/tmp/openkp-backup-pre-rewrite` self-cleans on reboot — preserve until GC confirmed if you reboot before completing the flip.
+
+**Website:** [openkp.org](https://openkp.org) live on Cloudflare Pages as of 2026-05-11 (commit `25a7259`, see session-20). Source under `site/` — static single-page, no build step, no framework. CAIHL framing in copy, MCP-client-agnostic at runtime. Codex drafted, two review passes, then deployed via wrangler direct upload. Future deploys from repo root: `wrangler pages deploy site --project-name=openkp --branch=main --commit-dirty=true`. Switch to GitHub auto-deploy after the PHI force-push lands.
 
 ## Next session: start here
 
