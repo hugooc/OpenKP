@@ -24,6 +24,11 @@ dependencies = [
     "pydantic>=2.0.0",
 ]
 
+[project.urls]
+Homepage = "https://openkp.org"
+Repository = "https://github.com/hugooc/OpenKP"
+Issues = "https://github.com/hugooc/OpenKP/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",

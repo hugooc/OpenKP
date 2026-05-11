@@ -1,5 +1,7 @@
 # OpenKP
 
+Website: [openkp.org](https://openkp.org)
+
 A patient-directed MCP server that bridges Claude and Kaiser Permanente Northern California's patient portal.
 
 Inspired by [Open Record](https://github.com/Fan-Pier-Labs/openrecord) by Ryan Hughes / Fan Pier Labs. Open Record targets vanilla Epic MyChart, which Kaiser is not. OpenKP implements the same idea (let Claude drive your medical record through MCP) against Kaiser's Ping-fronted portal, with independently written code.
