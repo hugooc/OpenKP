@@ -22,9 +22,15 @@ docs/research/**/*.har
 docs/research/**/*.json.phi
 
 # Recon journals are dev artifacts that contain real account data.
-# Live in ~/Desktop/OpenKP Documentation/recon/ instead. Existing tracked
-# journals will be expunged from git history before public release.
+# Live in private/documentation/recon/ (covered by the private/ rule below).
+# Tracked journals were expunged from history via the 2026-05-10 PHI rewrite.
 docs/recon/
+
+# Private local project archive. Contains PHI, recon journals, screenshots,
+# rewrite replacement tables, sample session data, and other non-publishable
+# material. Anything you keep alongside the repo for your own use but should
+# never ship publicly.
+private/
 
 # Python (in case anything leaks outside openkp/)
 __pycache__/

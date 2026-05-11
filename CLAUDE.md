@@ -95,7 +95,7 @@ header capture.
 
 - `DESIGN.md` — vision, principles, architecture, roadmap, tool inventory, safety patterns. Single source of truth.
 - `docs/release-checklist.md` — pre-public-release todos. Items 1 (README) and 4 (LICENSE) done; item 2 (history rewrite) is the only remaining hard blocker.
-- **Recon journals live OUTSIDE the repo** at `~/Desktop/OpenKP Documentation/recon/` (since session 17 — `docs/recon/` is gitignored). The last few are the most relevant context: session-17 (PHI scrub + READMEs), session-16 (visit notes + AVS), session-15 (appointments + page_size), session-14 (send_message), session-13 (track_refill_order).
+- **Recon journals live in the gitignored sidecar** at `private/documentation/recon/` (consolidated 2026-05-10 from `~/Desktop/OpenKP Documentation/`; the whole `private/` tree is gitignored). The last few are the most relevant context: session-17 (PHI scrub + READMEs), session-16 (visit notes + AVS), session-15 (appointments + page_size), session-14 (send_message), session-13 (track_refill_order).
 - `docs/adr/README.md` — architectural decisions index. ADRs 001-006 live here.
 - `docs/research/endpoints/` — per-endpoint request/response maps. Start with `profile.md`.
 
