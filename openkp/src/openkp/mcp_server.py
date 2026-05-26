@@ -33,6 +33,8 @@ from openkp import __version__
 from openkp.config import load_config
 from openkp.scrapers.allergies import fetch_allergies
 from openkp.scrapers.appointments import fetch_appointments, fetch_past_visits
+from openkp.scrapers.care_team import fetch_care_team
+from openkp.scrapers.implants import fetch_implants
 from openkp.scrapers.visit_notes import (
     download_visit_avs_pdf as _download_visit_avs_pdf,
     fetch_visit_notes,
@@ -421,6 +423,72 @@ async def list_allergies() -> dict:
     store = _get_session_store()
     client = KaiserRequest(store)
     response = await fetch_allergies(client)
+    return response.model_dump()
+
+
+@mcp.tool()
+async def list_care_team() -> dict:
+    """List the patient's care team and recent providers.
+
+    This is the "Care Team and Recent Providers" panel from the MyChart home
+    page: the primary care provider, specialists, and recently-seen clinicians.
+    Use it to answer "who is my doctor / cardiologist / care team", or as the
+    lookup step before messaging or scheduling with a specific provider.
+
+    Returns a dict shaped like the `CareTeamResponse` pydantic model in
+    `openkp.scrapers.care_team`, with a `providers` array plus `total_count`.
+
+    Each provider carries: `id`, `name`, `specialty` (e.g. "Family Practice",
+    "Cardiology"), `relation` (e.g. "Primary Care Provider", "Cardiologist"),
+    `department_id`, `is_external` (true for non-KP providers), `photo_url`,
+    `provider_page_url` (public bio), `care_team_status` (raw int enum), and
+    capability flags `can_message`, `can_schedule`, `can_request_appointment`,
+    `can_view_details`.
+
+    IMPORTANT: these flags describe the buttons KP shows on the care team panel
+    itself, NOT what OpenKP's other tools can do. `can_message=False` does NOT
+    mean the provider is unreachable — messaging runs through a separate surface
+    (`list_message_recipients` + `send_message`), where a provider flagged
+    `can_message=False` here may still be a valid message recipient. Treat these
+    flags as hints about KP's portal UI, not as gates on OpenKP's messaging or
+    scheduling tools. To message a provider, check `list_message_recipients`.
+
+    Richer than `get_profile`, which surfaces only the PCP. See
+    `docs/research/endpoints/care_team.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    response = await fetch_care_team(client)
+    return response.model_dump()
+
+
+@mcp.tool()
+async def list_implants() -> dict:
+    """List the patient's implanted (and explanted) medical devices.
+
+    This is the MyChart "Implants" / device list: pacemakers, ICDs and leads,
+    stents, intraocular lenses, orthopedic hardware, and similar. Useful for
+    MRI-safety questions, device recall lookups, sharing exact device specs
+    with a non-KP provider, or answering "what's implanted in me and when".
+
+    Returns a dict shaped like the `ImplantsResponse` pydantic model in
+    `openkp.scrapers.implants`, with an `implants` array plus `total_count`.
+
+    Each implant carries: `id`, `name`, `type` (e.g. "Pacemaker",
+    "Cardiac Implant", "Ophthalmology"), `area` (body area, e.g. "Chest",
+    "Eye"; null when unknown), `laterality` ("Left"/"Right"), `status`
+    (e.g. "Implanted"), `is_explant`, `is_external`, `manufacturer`, `model`,
+    `serial`, `udi` (full barcode string), `sdi` (the device-identifier portion
+    of the UDI), `lot`, `comments`, `description`, and two procedure blocks:
+    `implanted` and `explanted`. Each procedure block (when present) carries
+    `date` (display string), `date_iso` ("YYYY-MM-DD", null if unparseable),
+    `provider`, `facility`, and `device_count`.
+
+    See `docs/research/endpoints/implants.md`.
+    """
+    store = _get_session_store()
+    client = KaiserRequest(store)
+    response = await fetch_implants(client)
     return response.model_dump()
 
 
