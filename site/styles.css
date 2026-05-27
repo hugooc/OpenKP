@@ -239,9 +239,7 @@ h3 {
 }
 
 .slide-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: inline-block;
   justify-self: start;
   padding: 4px 10px;
   border: 1px solid currentColor;
@@ -250,12 +248,6 @@ h3 {
   font-weight: 850;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.slide-tag svg {
-  width: 13px;
-  height: 13px;
-  flex: none;
 }
 
 .hero-carousel-track > .chat-window:nth-child(1) .slide-tag {
