@@ -8,15 +8,15 @@ Inspired by [Open Record](https://github.com/Fan-Pier-Labs/openrecord) by Ryan H
 
 ## Status
 
-**Phase 2 (read-only) closed. Phase 3 (writes) in progress.** As of 2026-05-04:
+**Phase 2 (read-only) closed. Phase 3 (writes) in progress.** As of 2026-05-26:
 
-- **22 MCP tools** registered: 3 housekeeping, 17 reads, 2 writes (mail-order refill, non-urgent message).
-- **527 tests** passing.
+- **24 MCP tools** registered: 3 housekeeping, 19 reads, 2 writes (mail-order refill, non-urgent message).
+- **567 tests** passing on macOS. Windows runs the same suite with 4 platform-specific failures that don't affect any user-facing tool — see [`docs/install/windows.md`](../docs/install/windows.md).
 - **NorCal region only** — see "Regional support" below.
 
-Live-verified end-to-end against real Kaiser data: profile, messages, lab results (incl. PDF download), medications, problems, allergies, appointments (upcoming + past), visit notes, AVS, refill *preview*, send-message *preview*, refill order tracking. Commit paths for `request_refill` and `send_message` are unit-tested but not yet exercised live; see the "Write tools — preview vs commit" section.
+Live-verified end-to-end against real Kaiser data: profile, messages, lab results (incl. PDF download), medications, problems, allergies, appointments (upcoming + past), visit notes, AVS, care team and recent providers, implanted devices, refill *preview*, send-message *preview*, refill order tracking. Commit paths for `request_refill` and `send_message` are unit-tested but not yet exercised live; see the "Write tools — preview vs commit" section.
 
-The repo is private during this phase but tracks public-release readiness — see `docs/release-checklist.md` at the workspace root.
+The repo is now public at [github.com/hugooc/OpenKP](https://github.com/hugooc/OpenKP). The historical pre-launch checklist lives in `docs/release-checklist.md` at the workspace root.
 
 ## Regional support
 
@@ -60,7 +60,7 @@ Authentication uses a persistent Chromium profile driven by Playwright. **First 
 
 You need:
 
-- macOS (tested) or Linux (untested).
+- macOS (tested) or Windows (tested, see [`docs/install/windows.md`](../docs/install/windows.md) for platform-specific steps). Linux is untested but should be close to macOS.
 - Python 3.11 or newer.
 - A Kaiser Permanente NorCal member account.
 
@@ -99,7 +99,7 @@ From `~/OpenKP/openkp`:
 .venv/bin/pytest -q
 ```
 
-You should see `527 passed`. If anything fails, stop and investigate before going further.
+You should see `567 passed` on macOS. On Windows you'll see 4 failures in `_strftime` / file-permission tests — those are platform-specific and harmless. See [`docs/install/windows.md`](../docs/install/windows.md). If anything else fails, stop and investigate.
 
 ### 4. First authenticated run (one-time, ~2 minutes)
 
@@ -181,6 +181,8 @@ For write operations:
 | `list_past_visits` | Past visits, paginated. Supports `max_pages`, `page_size` (default 50, cap 78), and `until_iso`. |
 | `read_visit_notes` | Clinical notes (provider chart notes, progress notes) + rendered After Visit Summary. |
 | `download_visit_avs_pdf` | Saves the canonical AVS PDF to `~/.openkp/downloads/`. |
+| `list_care_team` | Care team and recent providers — PCP, specialists, recently-seen clinicians, with per-provider capability flags. |
+| `list_implants` | Implanted and explanted devices (pacemakers, ICDs, leads, IOLs, ortho hardware) with manufacturer, model, serial, UDI, body area, and implant/explant procedure details. |
 | `track_refill_order` | Read-side companion to `request_refill`. Surfaces order status, shipping, and tracking. |
 | `list_message_recipients` | Providers and pools you can message. |
 | `list_message_topics` | "Reason for Message" catalog (5 topics). |
@@ -213,7 +215,7 @@ openkp/
 ├── pyproject.toml              ← deps, entry point, build config
 ├── .env.example                ← template for credentials
 ├── README.md                   ← this file
-├── LICENSE                     ← MIT
+├── LICENSE                     ← PolyForm Noncommercial 1.0.0
 ├── src/openkp/
 │   ├── __init__.py
 │   ├── config.py               ← credential loader (env + keychain)
@@ -231,11 +233,14 @@ openkp/
 │       ├── allergies.py        ← allergy list
 │       ├── appointments.py     ← upcoming + past visits
 │       ├── visit_notes.py      ← clinical notes + AVS
+│       ├── care_team.py        ← care team + recent providers
+│       ├── implants.py         ← implanted + explanted devices
+│       ├── emergency_contacts.py ← emergency contacts + DPOAHC agents
 │       └── refill.py           ← mail-order refill commit + tracking
 ├── scripts/
 │   └── recon_*.py              ← per-endpoint reconnaissance scripts
 └── tests/
-    └── test_*.py               ← 527 tests, mock httpx via _patch_http
+    └── test_*.py               ← 567 tests, mock httpx via _patch_http
 ```
 
 ## Privacy
@@ -249,7 +254,7 @@ openkp/
 ## Legal
 
 - Kaiser's terms of service almost certainly prohibit automated access. Personal use on your own account is a gray zone. This is a research tool.
-- Open Record's license is source-available and prohibits commercial redistribution. OpenKP is MIT-licensed and does not use Open Record's code, only its public architecture as inspiration.
+- Open Record's license is source-available and prohibits commercial redistribution. OpenKP is licensed under [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) and does not use Open Record's code, only its public architecture as inspiration. See ADR-007 for the relicense rationale.
 
 ## Credits
 

@@ -5,7 +5,7 @@ description = "A patient-directed MCP server that bridges Claude and Kaiser Perm
 authors = [{name = "Hugo Campos"}]
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = {text = "PolyForm-Noncommercial-1.0.0"}
 
 dependencies = [
     # MCP server

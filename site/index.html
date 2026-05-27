@@ -57,23 +57,85 @@
           </div>
         </div>
 
-        <div class="hero-panel" aria-label="OpenKP example">
+        <div class="hero-panel" aria-label="OpenKP examples">
           <div class="panel-toolbar">
             <span></span><span></span><span></span>
             <strong>Claude Desktop</strong>
           </div>
-          <div class="chat-window">
-            <div class="bubble user">
-              Read every visit note from the last two years. Where did I raise concerns,
-              ask questions, or push back? How was that documented?
+          <div class="hero-carousel" data-carousel>
+            <div class="hero-carousel-track" aria-live="polite">
+              <div class="chat-window is-active" data-slide aria-roledescription="slide" aria-label="Example 1 of 3">
+                <div class="slide-tag">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <path d="M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+                    <path d="M14 3v5h5"/>
+                    <path d="M9 13h6"/>
+                    <path d="M9 17h6"/>
+                  </svg>
+                  Visit notes
+                </div>
+                <div class="bubble user">
+                  Read every visit note from the last two years. Where did I raise concerns,
+                  ask questions, or push back? How was that documented?
+                </div>
+                <div class="tool-call">
+                  <span class="status-dot"></span>
+                  openkp.list_past_visits &rarr; openkp.read_visit_notes
+                </div>
+                <div class="bubble assistant">
+                  I found repeated concern-raising across cardiology visits and message
+                  threads. Here are the patterns in how your engagement appears in the chart...
+                </div>
+              </div>
+              <div class="chat-window" data-slide aria-roledescription="slide" aria-label="Example 2 of 3" aria-hidden="true">
+                <div class="slide-tag">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <rect x="2" y="8" width="8" height="8" rx="1.5"/>
+                    <path d="M10 12h2l1.5-3 2 6 1.5-3H22"/>
+                  </svg>
+                  Implants
+                </div>
+                <div class="bubble user">
+                  What devices are implanted in me? I want make, model, serial,
+                  and the date each one went in.
+                </div>
+                <div class="tool-call">
+                  <span class="status-dot"></span>
+                  openkp.list_implants
+                </div>
+                <div class="bubble assistant">
+                  Two devices on record. One active cardiac pacemaker with manufacturer,
+                  model, and UDI captured. One earlier lead explanted in a prior procedure.
+                  Implant and explant providers attached...
+                </div>
+              </div>
+              <div class="chat-window" data-slide aria-roledescription="slide" aria-label="Example 3 of 3" aria-hidden="true">
+                <div class="slide-tag">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <rect x="3" y="5" width="18" height="14" rx="1.5"/>
+                    <path d="M3 7l9 6 9-6"/>
+                  </svg>
+                  Messages
+                </div>
+                <div class="bubble user">
+                  Walk back through every message thread and surface anything I asked
+                  about that never got a clear follow-up.
+                </div>
+                <div class="tool-call">
+                  <span class="status-dot"></span>
+                  openkp.list_messages &rarr; openkp.read_message
+                </div>
+                <div class="bubble assistant">
+                  Four threads where your question didn't get a direct reply.
+                  Three are medication-related, one is about a specialist referral.
+                  Pulling the most recent to the top...
+                </div>
+              </div>
             </div>
-            <div class="tool-call">
-              <span class="status-dot"></span>
-              openkp.list_past_visits &rarr; openkp.read_visit_notes
-            </div>
-            <div class="bubble assistant">
-              I found repeated concern-raising across cardiology visits and message
-              threads. Here are the patterns in how your engagement appears in the chart...
+            <div class="carousel-dots" role="tablist" aria-label="Example questions">
+              <button type="button" class="carousel-dot is-active" data-dot aria-current="true" aria-label="Show example 1"></button>
+              <button type="button" class="carousel-dot" data-dot aria-label="Show example 2"></button>
+              <button type="button" class="carousel-dot" data-dot aria-label="Show example 3"></button>
             </div>
           </div>
         </div>
@@ -152,9 +214,9 @@
       <section class="tools-section" id="tools">
         <div class="section-kicker">Tool surface</div>
         <div class="tools-header">
-          <h2>22 MCP tools, focused on real patient workflows.</h2>
+          <h2>24 MCP tools, focused on real patient workflows.</h2>
           <p>
-            Three housekeeping tools, seventeen read tools, and two write tools.
+            Three housekeeping tools, nineteen read tools, and two write tools.
             Read paths are broadly live-verified. Write commit paths are still treated carefully.
           </p>
         </div>
@@ -163,6 +225,7 @@
             <h3>Read</h3>
             <ul>
               <li>Profile, insurance, PCP, emergency contacts</li>
+              <li>Care team, specialists, implanted devices</li>
               <li>Messages, message attachments, archival search</li>
               <li>Lab results, imaging, PDFs, narratives</li>
               <li>Medications, refill status, order tracking</li>
@@ -211,6 +274,12 @@
             assistant: Claude Code is the clearest path for non-developers who are
             comfortable following terminal instructions.
           </p>
+          <p>
+            Works on Mac and Windows. Windows adds a couple of setup steps
+            (Visual C++ runtime, a force-reinstall of one Python dependency).
+            Notes in
+            <a href="https://github.com/hugooc/OpenKP/blob/main/docs/install/windows.md">docs/install/windows.md</a>.
+          </p>
         </div>
       </section>
 
@@ -239,7 +308,7 @@
 
       <section class="final-cta">
         <h2>Own the interface to your own record.</h2>
-        <p>Open source. MIT licensed. Local-first. Built for patients who want to inspect, adapt, and direct their tools.</p>
+        <p>Source-available. Noncommercial license (PolyForm NC 1.0.0). Local-first. A gift for patients who want to inspect, adapt, and direct their tools.</p>
         <a class="button primary" href="https://github.com/hugooc/OpenKP">Get OpenKP on GitHub</a>
       </section>
     </main>

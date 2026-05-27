@@ -217,6 +217,107 @@ h3 {
   padding: 22px;
 }
 
+.hero-carousel {
+  position: relative;
+}
+
+.hero-carousel-track {
+  display: grid;
+}
+
+.hero-carousel-track > .chat-window {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 320ms ease, visibility 0s linear 320ms;
+}
+
+.hero-carousel-track > .chat-window.is-active {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 320ms ease, visibility 0s linear 0s;
+}
+
+.slide-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  color: var(--rust);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.slide-tag svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.hero-carousel-track > .chat-window:nth-child(1) .slide-tag {
+  color: var(--rust);
+}
+
+.hero-carousel-track > .chat-window:nth-child(2) .slide-tag {
+  color: var(--gold);
+}
+
+.hero-carousel-track > .chat-window:nth-child(3) .slide-tag {
+  color: var(--green);
+}
+
+.hero-carousel-track > .chat-window:nth-child(1) .tool-call {
+  border-color: var(--rust);
+  color: var(--rust);
+}
+
+.hero-carousel-track > .chat-window:nth-child(2) .tool-call {
+  border-color: var(--gold);
+  color: #6a4f1a;
+}
+
+.hero-carousel-track > .chat-window:nth-child(3) .tool-call {
+  border-color: var(--green);
+  color: var(--green-deep);
+}
+
+.carousel-dots {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding: 14px 0 18px;
+  border-top: 1px solid var(--line);
+  background: #f0eadf;
+}
+
+.carousel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.carousel-dot:hover {
+  transform: translateY(-1px);
+}
+
+.carousel-dot.is-active {
+  background: var(--ink);
+}
+
+.carousel-dot:focus-visible {
+  outline: 2px solid var(--rust);
+  outline-offset: 2px;
+}
+
 .bubble {
   padding: 16px;
   border: 1px solid var(--line);
@@ -440,6 +541,16 @@ code {
 
 .install-card p:last-child {
   margin-bottom: 0;
+}
+
+.install-card a {
+  color: var(--rust);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.install-card a:hover {
+  color: var(--ink);
 }
 
 .limits-grid {

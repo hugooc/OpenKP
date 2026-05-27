@@ -20,6 +20,7 @@ Every ADR has the same five sections:
 - [ADR-004](004-writes-require-confirm-token.md) — Writes require a confirmation token at the tool layer
 - [ADR-005](005-interactive-first-run-auth.md) — Interactive first-run auth, silent subsequent runs
 - [ADR-006](006-user-endpoint-piggyback.md) — Piggyback on the pharmacy consumer identity for `/mycare/v1.0/user`
+- [ADR-007](007-relicense-to-polyform-noncommercial.md) — Relicense from MIT to PolyForm Noncommercial 1.0.0
 
 ## When to write a new ADR
 

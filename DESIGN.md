@@ -16,7 +16,7 @@ Kaiser's sanctioned FHIR patient API is read-only and capped to USCDI. That limi
 
 ### What OpenKP is
 
-A local MCP server that runs on the user's Mac, exposes patient-portal actions to Claude via the Model Context Protocol, and keeps all credentials and PHI on the user's machine.
+A local MCP server that runs on the user's machine (macOS and Windows are both tested, see `docs/install/windows.md`), exposes patient-portal actions to Claude via the Model Context Protocol, and keeps all credentials and PHI local.
 
 ### What OpenKP is not
 
@@ -45,7 +45,7 @@ These are the non-negotiables. Every design decision traces back to one of them.
 
 4. **Everything is auditable.** Every write action is logged locally with timestamp, inputs, and Kaiser's response. The user can always answer "what did my AI do in my record?"
 
-5. **Open source, MIT licensed.** Anyone can fork, inspect, modify, or redistribute. Unlike Open Record's source-available license, OpenKP imposes no commercial or redistribution restrictions.
+5. **Source-available, noncommercial license.** OpenKP ships under PolyForm Noncommercial 1.0.0. Anyone can fork, inspect, modify, redistribute, and use it for any noncommercial purpose — personal, research, educational, advocacy, nonprofit, government. Commercial use (paid SaaS, paid consulting, embedding in paid products) requires a separate license from the maintainer. Originally MIT-licensed at public launch in May 2026; relicensed via ADR-007 to align with the maintainer's intent that OpenKP serve patients rather than commercial extraction.
 
 6. **Stand on shoulders, don't copy code.** Open Record is our conceptual predecessor. We learn from its architecture, its tool surface, and its docs. We do not copy its code.
 
@@ -204,7 +204,7 @@ Each phase has an explicit exit criterion. We do not move to the next phase unti
 4. License surface, security disclosure path, code of conduct.
 5. Announcement to the CAIHL-adjacent community.
 
-**Out of scope for Phase 4:** bundled installer, `.dxt` packaging, signing/notarization, GUI credential entry, cross-platform builds beyond what currently works on the author's Mac. These move to Phase 4.5 if real demand emerges.
+**Out of scope for Phase 4:** bundled installer, `.dxt` packaging, signing/notarization, GUI credential entry, cross-platform packaging beyond the source-install path (which works today on macOS and Windows — see `docs/install/windows.md`). These move to Phase 4.5 if real demand emerges.
 
 **Exit criterion:** A KP member who knows what a terminal is, with Claude Code installed, can clone the repo and complete a successful end-to-end query of their own record (e.g., "summarize my last lipid panel") without needing to ask the author for help.
 
@@ -463,7 +463,7 @@ The log is append-only. The user can review it at any time to see exactly what O
 See Section 5 roadmap phases 4, 4.5, and 5 for the full distribution plan. Summary:
 
 1. **Now (Phases 1-3):** Build the read and write tools to a credible MVP. Local install for the author and a small group of contributors.
-2. **Phase 4 (next public step):** GitHub release. README structured for both human readers and Claude Code as the install agent. Audience is technically-curious KP members. Mac-first is acceptable in v1 as long as it's called out clearly.
+2. **Phase 4 (next public step):** GitHub release. README structured for both human readers and Claude Code as the install agent. Audience is technically-curious KP members. macOS is the primary tested platform, with Windows now supported via a short addendum (`docs/install/windows.md`).
 3. **Phase 4.5 (only if demand justifies it):** `.dxt` installer, bundled runtime, GUI credential entry, signing and notarization, install video. Cross-platform if Windows demand emerges.
 4. **Phase 5 (maybe):** Chrome extension architecture if Playwright maintenance becomes painful.
 5. **Never:** hosted service. The legal and ethical costs outweigh any convenience gain.
@@ -474,7 +474,7 @@ See Section 5 roadmap phases 4, 4.5, and 5 for the full distribution plan. Summa
 
 Open Record, by Ryan Hughes at Fan Pier Labs, is the prior art and conceptual source for this project. OpenKP does not use any of Open Record's code. We are deliberately implementing from scratch because:
 
-1. Open Record's license is source-available and restricts commercial use and redistribution. OpenKP is MIT-licensed.
+1. Open Record's license is source-available and restricts commercial use and redistribution. OpenKP is licensed under PolyForm Noncommercial 1.0.0 (also source-available, also restricts commercial use, but defined in plain-English software-native terms instead of Open Record's bespoke clauses). See ADR-007.
 2. Open Record targets vanilla Epic MyChart. Kaiser is a different auth architecture (Ping OAuth in front of Epic). The 896-line MyChart login is not reusable.
 3. Open Record is a full web application with Postgres, user accounts, and a Gemini AI proxy. OpenKP is a single-user local tool. The web app scaffolding is overhead we don't need.
 
@@ -488,7 +488,7 @@ Open Record, by Ryan Hughes at Fan Pier Labs, is the prior art and conceptual so
 **What we do differently:**
 - Python instead of TypeScript/Bun (solo-builder velocity)
 - Single-user local instead of multi-tenant web app
-- MIT license instead of source-available
+- PolyForm Noncommercial 1.0.0 (also source-available, but plain-English software-native terms)
 - Safety patterns (confirm-before-act, audit log, dry-run) as first-class, not afterthoughts
 - CAIHL framing as the organizing purpose, not an incidental benefit
 
@@ -605,7 +605,7 @@ Open Record, by Ryan Hughes at Fan Pier Labs, is the prior art and conceptual so
 |---|---|---|
 | Python over TypeScript | TypeScript (matches Open Record) | Faster solo iteration; Playwright Python is mature; simpler packaging for `.dxt` |
 | Playwright over pure HTTP | Raw httpx + Ping OAuth library | Ping's JS-driven login and device fingerprinting make pure HTTP fragile; Playwright pays the reliability tax upfront |
-| MIT license | Source-available | We want this to be reusable by anyone, including researchers and other patient-advocacy projects |
+| PolyForm Noncommercial 1.0.0 | MIT (original v1), then revisited | Originally MIT at public launch (2026-05-11). Relicensed via ADR-007 on 2026-05-27 to PolyForm NC. Still source-available and freely reusable for individuals, researchers, advocates, nonprofits, and government, but no commercial extraction without a separate license. Aligns the legal terms with the maintainer's intent. |
 | Single-user local | Multi-tenant hosted | Privacy ethics and legal liability both favor local; also sidesteps HIPAA BAA complexity |
 | FastMCP over raw MCP SDK | Raw MCP SDK | Decorator syntax is cleaner; official Anthropic recommendation |
 | Keychain for credentials | Encrypted `.env` with master password | OS keychain is the system's existing answer to this problem; no need to reinvent |

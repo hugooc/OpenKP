@@ -4,7 +4,7 @@
 
 Website: [openkp.org](https://openkp.org)
 
-A patient-directed MCP server that bridges Claude and **Kaiser Permanente Northern California's** patient portal — letting you act on your own medical record, with your own credentials, on your own Mac.
+A patient-directed MCP server that bridges Claude and **Kaiser Permanente Northern California's** patient portal — letting you act on your own medical record, with your own credentials, on your own machine. Tested on macOS and Windows.
 
 ```
 You ─►  Claude Desktop ─►  OpenKP (local) ─►  kp.org
@@ -18,7 +18,7 @@ Kaiser's portal shows you plans, orders, and results. It doesn't show you how *y
 
 This is **critical AI health literacy** in practice — patient-directed AI on patient-owned data, surfacing what institutional systems are not built to make legible. Background: ["Critical AI Health Literacy as Liberation Technology"](https://nam.edu/perspectives/critical-ai-health-literacy-as-liberation-technology-a-new-skill-for-patient-empowerment) (NAM Perspectives) and [aipatients.org](https://aipatients.org).
 
-OpenKP exposes 17 read tools and 2 write tools covering appointments, labs, messages, medications, problems, allergies, demographics, visit notes, and after-visit summaries. Other questions it can handle:
+OpenKP exposes 19 read tools and 2 write tools covering appointments, labs, messages, medications, problems, allergies, demographics, visit notes, after-visit summaries, care team and recent providers, and implanted devices. Other questions it can handle:
 
 - *"How many appointments did I have last year, split by virtual vs in-person?"*
 - *"Which lab values have drifted in the last 18 months?"*
@@ -47,6 +47,8 @@ Install steps live in [`openkp/README.md`](openkp/README.md). It walks through v
 
 If you have Claude Code installed, the easiest path is to clone this repo and ask Claude Code to walk you through the install — `openkp/README.md` is structured for exactly that flow.
 
+**On Windows?** Same instructions, plus a couple of platform-specific setup steps. See [`docs/install/windows.md`](docs/install/windows.md) for the Visual C++ runtime requirement, the `greenlet` reinstall, and the Windows command translations.
+
 ## What's inside
 
 ```
@@ -55,6 +57,7 @@ OpenKP/
 ├── DESIGN.md                    ← vision, architecture, roadmap, principles
 ├── docs/
 │   ├── adr/                     ← architecture decision records (ADR-001 onward)
+│   ├── install/                 ← platform-specific install notes (windows.md)
 │   ├── research/endpoints/      ← per-endpoint Kaiser API maps
 │   └── release-checklist.md     ← pre-public-release todos
 ├── openkp/                      ← the Python package + tests + install README
@@ -72,11 +75,13 @@ The full list lives in `DESIGN.md` §2. The three that matter most:
 
 ## Status
 
-Phase 2 (read-only) is closed. Phase 3 (writes) is in progress. As of 2026-05-04: 22 MCP tools registered, 527 tests passing, run with `cd openkp && .venv/bin/pytest -q`. Per-tool status (live-verified, preview-only, deferred) is documented in `openkp/README.md`.
+Phase 2 (read-only) is closed. Phase 3 (writes) is in progress. As of 2026-05-26: 24 MCP tools registered, 567 tests passing on macOS, run with `cd openkp && .venv/bin/pytest -q`. Per-tool status (live-verified, preview-only, deferred) is documented in `openkp/README.md`. Windows is supported with the caveats in [`docs/install/windows.md`](docs/install/windows.md) — all but 4 platform-specific tests pass, and none of the failures affect any user-facing tool.
 
 ## License
 
-MIT. See [`openkp/LICENSE`](openkp/LICENSE).
+**PolyForm Noncommercial 1.0.0.** Free for personal, research, educational, advocacy, nonprofit, and government use. Commercial use (paid SaaS, paid consulting, embedding in paid products) requires a separate license from the maintainer. See [`openkp/LICENSE`](openkp/LICENSE) for the full text and [`docs/adr/007-relicense-to-polyform-noncommercial.md`](docs/adr/007-relicense-to-polyform-noncommercial.md) for the rationale.
+
+Snapshots cloned before the relicense remain under MIT for whoever has them — future commits land under PolyForm NC.
 
 ## Credits
 

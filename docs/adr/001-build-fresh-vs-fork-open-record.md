@@ -1,7 +1,7 @@
 # ADR-001: Build fresh, don't fork Open Record
 
 **Date:** 2026-04-22
-**Status:** Active
+**Status:** Active. The license-specific aspects of this decision (mentions of "MIT" below) are superseded by ADR-007, which relicenses OpenKP from MIT to PolyForm Noncommercial 1.0.0. The build-fresh decision itself is unchanged.
 **Authors:** Hugo Campos
 
 ## Context

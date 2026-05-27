@@ -4,7 +4,7 @@ This file is auto-loaded by Claude Code when it opens `~/OpenKP/`. It's the on-r
 
 ## What OpenKP is
 
-A local MCP server that bridges Claude and Kaiser Permanente's patient portal. Single-user, runs on Hugo's Mac. All credentials and PHI stay on the machine. MIT licensed. No hosted service. See `DESIGN.md` §1-2 for the full "why."
+A local MCP server that bridges Claude and Kaiser Permanente's patient portal. Single-user, runs on Hugo's Mac (and also tested on Windows — see `docs/install/windows.md`). All credentials and PHI stay on the machine. Licensed under PolyForm Noncommercial 1.0.0 (see ADR-007). No hosted service. See `DESIGN.md` §1-2 for the full "why."
 
 ## v1 audience and distribution
 
@@ -12,7 +12,7 @@ OpenKP v1 ships as an open-source GitHub project for **technically-curious KP me
 
 What this means for current work:
 
-- Keep the architecture unchanged. Local-first, MCP-over-stdio, Mac-first is fine.
+- Keep the architecture unchanged. Local-first, MCP-over-stdio. Mac is the primary tested platform, Windows runs the same code with a handful of platform-specific setup steps (`docs/install/windows.md`).
 - The README must read well for a curious human AND be structured enough for Claude Code to walk a user through install end-to-end.
 - Error messages should be clear, but they don't need to be tuned for non-technical users yet.
 - Lead positioning with the CAIHL frame: patient-directed AI on patient-owned data, not "AI reads my chart."
@@ -49,6 +49,10 @@ See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy
 **PHI history rewrite + public release:** rewrite done locally 2026-05-10 (HEAD `57ede8e` post-rewrite, see session-19). All commits scrubbed of PHI in blobs and messages. `docs/recon/` removed from history. **Public release used a fresh-repo strategy** rather than the force-push + GC route originally planned: `hugooc/OpenKP` was created fresh as a public repo on 2026-05-11 and the rewritten history was pushed there as its initial state. No PHI commits ever existed on the public repo, so the GitHub-GC-of-unreferenced-refs step is moot. The original pre-rewrite history lives privately at `hugooc/OpenKP-private-archive` (partial snapshot from 2026-04-25, 25 commits — only the early phase of development). The complete pre-rewrite mirror was `/tmp/openkp-backup-pre-rewrite/` and self-cleans on reboot; if you've rebooted, it's gone.
 
 **Website:** [openkp.org](https://openkp.org) live on Cloudflare Pages as of 2026-05-11 (commit `25a7259`, see session-20). Source under `site/` — static single-page, no build step, no framework. CAIHL framing in copy, MCP-client-agnostic at runtime. Codex drafted, two review passes, then deployed via wrangler direct upload. Future deploys from repo root: `wrangler pages deploy site --project-name=openkp --branch=main --commit-dirty=true`. Public repo is live, so you can also switch the Pages project to GitHub auto-deploy any time via the Cloudflare dashboard — no longer gated on anything.
+
+**Site refresh 2026-05-27:** the hero panel is now a 3-slide carousel (visit notes engagement, implants inventory, unresolved message threads) that auto-rotates every 5 seconds with dot navigation, per-slide topic tag, and accent-color shift per slide. Each topic tag leads with a tiny inline-SVG line icon (document for visit notes, device-plus-ECG-lead for implants, envelope for messages) that inherits the per-slide accent via `currentColor`; the icons are decorative (`aria-hidden`) so the tag text stays the accessible label. The tools section reads "24 MCP tools" with a `Care team, specialists, implanted devices` bullet for the new reads. The install card carries a short Windows-supported note linking to `docs/install/windows.md`. Implementation lives in `site/index.html` (HTML), `site/styles.css` (`.hero-carousel*`, `.slide-tag`, `.carousel-dot*`), and `site/script.js` (carousel rotation, pauses on hover/focus, respects `prefers-reduced-motion`).
+
+**Relicense 2026-05-27 (ADR-007):** OpenKP moved from MIT to **PolyForm Noncommercial 1.0.0**. The relicense reflects Hugo's intent that OpenKP serve patients and not be extracted commercially. Free for personal, research, educational, advocacy, nonprofit, and government use. Commercial use (paid SaaS, paid consulting, embedding in paid products) requires a separate license. `openkp/LICENSE` carries the canonical PolyForm text plus a `Required Notice: Copyright (c) 2026 Hugo Campos` line. Snapshots cloned under MIT before 2026-05-27 remain MIT for whoever has them — we can't claw back what's been licensed. Doc refs, `pyproject.toml`, and `site/index.html` final-CTA all updated. See `docs/adr/007-relicense-to-polyform-noncommercial.md`.
 
 ## Next session: start here
 
@@ -106,7 +110,7 @@ header capture.
 - `DESIGN.md` — vision, principles, architecture, roadmap, tool inventory, safety patterns. Single source of truth.
 - `docs/release-checklist.md` — pre-public-release todos. All hard blockers now closed: README, LICENSE, PHI history rewrite (via fresh-repo strategy), and website are all done. Repo is public at github.com/hugooc/OpenKP.
 - **Recon journals live in the gitignored sidecar** at `private/documentation/recon/` (consolidated 2026-05-10 from `~/Desktop/OpenKP Documentation/`; the whole `private/` tree is gitignored). The last few are the most relevant context: session-20 (openkp.org site review + deploy + custom domain + repo-state reconciliation, 2026-05-11), session-19 (Codex audit + release hygiene + PHI rewrite + sidecar consolidation, 2026-05-10), session-18 (click-around recon, 2026-05-06), session-17 (PHI scrub + READMEs), session-16 (visit notes + AVS).
-- `docs/adr/README.md` — architectural decisions index. ADRs 001-006 live here.
+- `docs/adr/README.md` — architectural decisions index. ADRs 001-007 live here.
 - `docs/research/endpoints/` — per-endpoint request/response maps. Start with `profile.md`.
 
 ## Work pattern for a new read tool
