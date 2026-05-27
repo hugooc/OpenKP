@@ -213,6 +213,10 @@ h3 {
 
 .chat-window {
   display: grid;
+}
+
+.chat-body {
+  display: grid;
   gap: 16px;
   padding: 22px;
 }
@@ -238,28 +242,40 @@ h3 {
   transition: opacity 320ms ease, visibility 0s linear 0s;
 }
 
-.slide-tag {
-  display: inline-block;
-  justify-self: start;
-  padding: 4px 10px;
-  border: 1px solid currentColor;
-  color: var(--rust);
-  font-size: 11px;
+.slide-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 14px 22px;
+  color: var(--white);
   font-weight: 850;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
-.hero-carousel-track > .chat-window:nth-child(1) .slide-tag {
-  color: var(--rust);
+.slide-num {
+  font-size: 20px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 
-.hero-carousel-track > .chat-window:nth-child(2) .slide-tag {
-  color: var(--gold);
+.slide-name {
+  font-size: 13px;
+  letter-spacing: 0.08em;
 }
 
-.hero-carousel-track > .chat-window:nth-child(3) .slide-tag {
-  color: var(--green);
+.hero-carousel-track > .chat-window:nth-child(1) .slide-head {
+  background: var(--rust);
+}
+
+.hero-carousel-track > .chat-window:nth-child(2) .slide-head {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.hero-carousel-track > .chat-window:nth-child(3) .slide-head {
+  background: var(--green);
 }
 
 .hero-carousel-track > .chat-window:nth-child(1) .tool-call {

@@ -65,50 +65,65 @@
           <div class="hero-carousel" data-carousel>
             <div class="hero-carousel-track" aria-live="polite">
               <div class="chat-window is-active" data-slide aria-roledescription="slide" aria-label="Example 1 of 3">
-                <div class="slide-tag">Visit notes</div>
-                <div class="bubble user">
-                  Read every visit note from the last two years. Where did I raise concerns,
-                  ask questions, or push back? How was that documented?
+                <div class="slide-head">
+                  <span class="slide-num">01</span>
+                  <span class="slide-name">Visit notes</span>
                 </div>
-                <div class="tool-call">
-                  <span class="status-dot"></span>
-                  openkp.list_past_visits &rarr; openkp.read_visit_notes
-                </div>
-                <div class="bubble assistant">
-                  I found repeated concern-raising across cardiology visits and message
-                  threads. Here are the patterns in how your engagement appears in the chart...
+                <div class="chat-body">
+                  <div class="bubble user">
+                    Read every visit note from the last two years. Where did I raise concerns,
+                    ask questions, or push back? How was that documented?
+                  </div>
+                  <div class="tool-call">
+                    <span class="status-dot"></span>
+                    openkp.list_past_visits &rarr; openkp.read_visit_notes
+                  </div>
+                  <div class="bubble assistant">
+                    I found repeated concern-raising across cardiology visits and message
+                    threads. Here are the patterns in how your engagement appears in the chart...
+                  </div>
                 </div>
               </div>
               <div class="chat-window" data-slide aria-roledescription="slide" aria-label="Example 2 of 3" aria-hidden="true">
-                <div class="slide-tag">Implants</div>
-                <div class="bubble user">
-                  What devices are implanted in me? I want make, model, serial,
-                  and the date each one went in.
+                <div class="slide-head">
+                  <span class="slide-num">02</span>
+                  <span class="slide-name">Implants</span>
                 </div>
-                <div class="tool-call">
-                  <span class="status-dot"></span>
-                  openkp.list_implants
-                </div>
-                <div class="bubble assistant">
-                  Two devices on record. One active cardiac pacemaker with manufacturer,
-                  model, and UDI captured. One earlier lead explanted in a prior procedure.
-                  Implant and explant providers attached...
+                <div class="chat-body">
+                  <div class="bubble user">
+                    What devices are implanted in me? I want make, model, serial,
+                    and the date each one went in.
+                  </div>
+                  <div class="tool-call">
+                    <span class="status-dot"></span>
+                    openkp.list_implants
+                  </div>
+                  <div class="bubble assistant">
+                    Two devices on record. One active cardiac pacemaker with manufacturer,
+                    model, and UDI captured. One earlier lead explanted in a prior procedure.
+                    Implant and explant providers attached...
+                  </div>
                 </div>
               </div>
               <div class="chat-window" data-slide aria-roledescription="slide" aria-label="Example 3 of 3" aria-hidden="true">
-                <div class="slide-tag">Messages</div>
-                <div class="bubble user">
-                  Walk back through every message thread and surface anything I asked
-                  about that never got a clear follow-up.
+                <div class="slide-head">
+                  <span class="slide-num">03</span>
+                  <span class="slide-name">Messages</span>
                 </div>
-                <div class="tool-call">
-                  <span class="status-dot"></span>
-                  openkp.list_messages &rarr; openkp.read_message
-                </div>
-                <div class="bubble assistant">
-                  Four threads where your question didn't get a direct reply.
-                  Three are medication-related, one is about a specialist referral.
-                  Pulling the most recent to the top...
+                <div class="chat-body">
+                  <div class="bubble user">
+                    Walk back through every message thread and surface anything I asked
+                    about that never got a clear follow-up.
+                  </div>
+                  <div class="tool-call">
+                    <span class="status-dot"></span>
+                    openkp.list_messages &rarr; openkp.read_message
+                  </div>
+                  <div class="bubble assistant">
+                    Four threads where your question didn't get a direct reply.
+                    Three are medication-related, one is about a specialist referral.
+                    Pulling the most recent to the top...
+                  </div>
                 </div>
               </div>
             </div>
