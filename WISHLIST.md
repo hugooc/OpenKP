@@ -290,3 +290,19 @@ The password never touches OpenKP — not in keyring, not in env, not in memory.
 ## Adding to the wishlist
 
 Keep entries tight. Use case + shape + what's missing + any non-goals. If an idea is just "would be nice if..." with no concrete shape, leave it out — the discipline is the point.
+
+---
+
+## Live-verification backlog
+
+Moved out of `CLAUDE.md` on 2026-07-28. These are shipped tools whose behavior is
+inferential or only partly exercised against real Kaiser data. Not blocking, but
+each one is a known gap between what the code assumes and what we've actually seen.
+
+- **Live-verify the `is_telemedicine` heuristic on `list_appointments` / `list_past_visits`.** Recon had zero virtual visits, so the heuristic (Telemedicine OR EVisit OR CanShowTelemedicine) is inferential. Cowork-Claude bypassed it by reading `visit_type` directly ("Telephone", "Video Visit"), but next time Hugo's calendar has a video or phone visit, peek at the dump to see whether the heuristic actually fires.
+- **Capture a filter-applied appointments HAR** to learn how `LoadPast` accepts a provider/specialty filter ID. The filter UI HAR (session 15) only loaded the dropdown options; we never saw a filter actually applied. Unblocks `list_past_visits(provider="...")`-style queries.
+- ~~**Live-verify the `send_message` commit path**~~ — **done 2026-07-29.** It took three separate fixes. The chain that was "theoretical-correct + unit-tested" was wrong in three places, because its response shapes were inferred from HAR byte sizes and the tests then mocked the inference. Full account in `docs/postmortems/2026-07-29-send-message-compose-chain.md`.
+
+  **Read that before live-verifying anything else on this list.** The same pattern applies to every item here: a tool whose response shapes were never captured is not "probably fine," and a green test suite over an inferred fixture is evidence of nothing. `request_refill`'s commit path is the next one exposed to exactly this risk. Tail `~/.openkp/audit.log` from the dev session before you fire `confirm=True`, and confirm the running server process is newer than your last edit.
+- Verify the DELIVERED transition for the chlorthalidone order from session 11 next time you're in OpenKP. The order number sits in `docs/research/captures/kp-refill-2-with-order-details.har` (gitignored) and the SHIPPED state is already snapshot in session-13.md. The remaining unknowns are the carrier-tracking-attached state and the DELIVERED transition.
+- Live-verify `list_messages(deep_search=True)` from Cowork. The download tool was end-to-end verified in session 12, but the deep_search code path wasn't called explicitly — Cowork-Claude effectively reproduced the algorithm manually with `before_iso` walking.

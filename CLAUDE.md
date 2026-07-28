@@ -19,94 +19,23 @@ What this means for current work:
 
 See `DESIGN.md` §1 (audience), §5 (Phase 4 / 4.5), §10 (distribution strategy).
 
-## Current state (2026-06-05)
+## Current state and next work
 
-- **Phase 0 scaffold:** complete.
-- **Phase 1 auth:** complete. Silent session reuse via `~/.openkp/session.json` + httpx probe to `/mychartcn/keepalive.asp`. Interactive first-run Chromium, silent after. See ADR-005 and `docs/recon/session-2.md`.
-- **Phase 2 read tools:** complete.
-  - `get_profile` ✅ shipped + live-verified. Demographics, contact info, insurance plans, PCP, **emergency contacts** (also covers DPOAHC healthcare agents). See `docs/recon/session-4.md` and `session-10.md`.
-  - `list_messages` + `read_message` ✅ shipped + live-verified. Message center list, single-thread read, search. See `docs/recon/session-5.md`.
-  - `list_lab_results` + `read_lab_result` + `download_lab_result_pdf` ✅ shipped + live-verified. Test results (labs, imaging, cardiac device reports) plus PDF download to `~/.openkp/downloads/`. The PDF tool surfaces four statuses: `downloaded`, `generation_in_progress` (Kaiser builds large PDFs on demand, retry in ~30s), `no_pdf_available` (no doc exists), `error`. See `docs/research/endpoints/labs.md` and `docs/recon/session-7.md`.
-  - `list_medications` ✅ shipped + live-verified. Active and recent prescriptions with dose, prescriber, sig, refills, copay, mailable / auto-refill flags. **First scraper to hit the new pharmacy BFF microservices on `apims.kaiserpermanente.org`** — proves session cookies cross subdomains within `.kaiserpermanente.org`. See `docs/research/endpoints/medications.md` and `docs/recon/session-8.md`.
-  - `list_problems` + `list_allergies` ✅ shipped + live-verified. Active diagnoses (name + date_noted, intentionally minimal — KP doesn't expose ICD/severity to patients) and allergy list (handles "no known allergies" as a first-class state via derived `status` field). Both back on the legacy `/mychartcn/Clinical/<topic>/LoadListData` family — meds was the BFF outlier, not the new normal. See `docs/research/endpoints/problems.md`, `allergies.md`, and `docs/recon/session-9.md`.
-  - `emergency_contacts` (closes Phase 2) ✅ shipped + live-verified. Returns the full relationship roster — emergency contacts, DPOAHC healthcare agents, conservators — from a single Epic/MyChart endpoint. See `docs/research/endpoints/emergency_contacts.md`.
-  - `list_appointments` + `list_past_visits` ✅ shipped + live-verified 2026-05-04. Upcoming/in-progress visits (single-call, no pagination) and past visits (paginated walker with `max_pages`, `page_size`, `until_iso` bounds). Both back on the legacy `/mychartcn/Visits/VisitsList/<Load*>` family. **Live-verified twice: "when's my next appointment" returned next visit cleanly; "how many appointments in 2025, split virtual vs in-person" walked past visits and answered correctly (9 clinical encounters: 6 in-person + 3 virtual).** Filter HAR yielded the `numVisitsToRetrieve` discovery (default page=10 in front end, but Kaiser honors up to 78 — OpenKP defaults to 50, 5x fewer round trips for multi-year history). Filter-by-provider would be a future extension via `LoadFilterOptions` (see `appointments.md` "Filter index"). Session journal in sidecar.
-  - `read_visit_notes` + `download_visit_avs_pdf` ✅ shipped + live-verified 2026-05-04. Clinical notes (provider chart notes, progress notes, op notes) plus the rendered After Visit Summary, for one past visit. Four-step server-side chain (`GetVisitDetailsPast` → `GetVisitNotes` → per-note `ValidateVisitNote` + `LoadReportContent(contextINI=HNO)` → `LoadReportContent(reportMnemonic=AMB_AVS)`) collapsed into one tool. **Two-CSRF gotcha:** Kaiser scopes anti-forgery tokens by referer; ValidateVisitNote uses `/visits/note?csn=...` referer while everything else uses `/visits/past-details?csn=...`. AVS PDF download follows the labs-PDF pattern (GetDocumentDetails → DownloadOrStream). HTML-stripped to plain text on `content_text`, raw HTML preserved on `content_html`. See `docs/research/endpoints/visit_notes.md`. Session journal in sidecar.
-  - `list_care_team` ✅ shipped + live-verified 2026-05-26. The home-page "Care Team and Recent Providers" roster — PCP, specialists, recently-seen clinicians — each with specialty, relationship label, and per-provider capability flags. Strict superset of `get_profile`'s single PCP field. Back on the legacy `/mychartcn/Clinical/CareTeam/Load` + `LoadExternal` family (one CSRF token covers both POSTs; external providers are best-effort). Built from an existing complete-body capture, no fresh HAR needed. **Gotcha documented:** `can_message` reflects only the care-team panel's inline button, NOT reachability — messaging still runs through `list_message_recipients` + `send_message`. See `docs/research/endpoints/care_team.md`. Session journal in sidecar (session-21).
-  - `list_implants` ✅ shipped + live-verified 2026-05-26. Implanted/explanted devices (pacemakers, ICDs, leads, IOLs, ortho hardware) with manufacturer, model, serial, UDI/SDI, body area, laterality, status, and implant/explant procedure (date + derived `date_iso` + provider). Single CSRF-gated POST to `/mychartcn/api/implants/GetImplants`, no pagination. `implantGroupList` is a body-area ordering index (`"zzz"` = Epic's sort-unknown-last sentinel); detail lives in `implantList`. **Live finding:** the newest device can appear twice (curated "Cardiac Implant" record + raw device-feed "Pacemaker" record, same serial) — OpenKP returns both faithfully, callers dedupe on `(serial, date_iso)`. `isoDate` is a display-string misnomer (same trap as the AVS date). See `docs/research/endpoints/implants.md`. Session journal in sidecar (session-21).
-  - `list_access_log` ✅ shipped + live-verified 2026-06-05. Portal/self and third-party access history from `/mychartcn/api/access-logs/GetPortalAccessLogEntries` and `GetThirdPartyAccessLogEntries`. Bounded 50-entry-page walker with `max_pages`, `has_more`, `stop_reason`, and explicit warning when Kaiser's cursor repeats. Live smoke tests returned Fasten Connect third-party entries from a single OAuth-authorized sync burst: page 1 worked normally; page 2 returned new older entries, then stopped with `cursor_repeated` because Kaiser returned `nextLineToParse: 1` again. Deeper third-party history likely needs another request parameter or filter, not just larger `max_pages`. Third-party log is the value center for the patient-owned-data framing: app/accessor, data class/action, method code, timestamp. See `docs/research/endpoints/access_logs.md`.
-  - `list_upcoming_orders` + `read_upcoming_order_instructions` ✅ shipped + live-verified 2026-06-05. Pending tests/procedures from the homepage Upcoming Tests and Procedures surface. CSRF-gated `MixedItemFeed` POST discovers opaque order ids from JSON action URIs; `GetUpcomingOrders` returns `orderGroupList`, `orderList`, `providerList`, and `upcomingOrdersSettings`. Instructions are embedded as HTML in `orderList[*].instructions`; no separate instructions endpoint appeared when expanding "More details." Parser fails clearly if required top-level maps are missing. See `docs/research/endpoints/upcoming_orders.md`.
-- **Phase 3 write tools:** underway.
-  - `request_refill(medication_id, confirm=False)` ✅ shipped 2026-04-25 (mail-only v1). Two-call confirm pattern, audit log + dry-run scaffolding. **Preview path live-verified, commit path pending next real refill cycle.** See `docs/recon/session-11.md`.
-  - `track_refill_order(order_number)` ✅ shipped + live-verified 2026-04-27 (read sibling to request_refill). Single GET against `/orderDetails`. Surfaces order status (INPROGRESS / SHIPPED / DELIVERED), per-Rx detail, shipping address, payment last-4 / type / expiry, and a derived `tracking_ids` list. **Both INPROGRESS (HAR) and SHIPPED (live, 2026-04-27) verified against real Kaiser data.** Confirmed: `copay` on rxList entries populates post-adjudication (null on INPROGRESS, real $ once shipped), and `SHIPPED` is a real intermediate state where `digitalStatus="Complete"` even though `trackingId` is still empty (carrier handoff lags by hours/days). DELIVERED transition still unverified. See `docs/recon/session-13.md`.
-  - `send_message(recipient_id, topic_value, subject, body, confirm=False)` + `list_message_recipients()` + `list_message_topics()` ✅ shipped 2026-05-03, **commit path live-verified 2026-07-29**. The commit path had never once succeeded before that date — see `docs/postmortems/2026-07-29-send-message-compose-chain.md` for why, and read the send-chain facts under "Key endpoint facts" before touching it. The chain is GetComposeId → **GetViewers** → SaveDraft → Send → RemoveComposeId; GetViewers is required and was missing in the original implementation. Two-call confirm pattern mirroring `request_refill`. Sits on `/mychartcn/api/medicaladvicerequests/*` (Kaiser's "Non-Urgent Medical Advice" / "Message your care team" surface). Audit log records intent/result/error with **subject and body NOT logged** (recipient name, topic, line count only). v1 limits: no attachments, no reply-to-existing-thread (always starts new conversation). Topic catalog discovered live: `97` Test Results / `98` Medication / `99` Visit Follow-Up / `100` Upcoming Appointment or Procedure / `101` Non-Urgent Medical Advice. See `docs/research/endpoints/messages.md` "Send new message" section and `docs/recon/session-14.md`.
-- **Late-Phase-2 attachments + deep search:**
-  - `download_message_attachment` ✅ shipped + live-verified 2026-04-25 (session 12). Two-step chain (`GetDocumentDetailsLegacy` → binary GET). Saves to `~/.openkp/downloads/`. Genetic panels and other clinically important documents arrive as message attachments — Kaiser doesn't surface them in test-results.
-  - `list_messages(deep_search=True, max_pages=30)` ✅ shipped + live-verified 2026-04-25 (session 12). Walks pagination via `localSummary.oldestSearchedInstantISO` because Kaiser's `searchQuery` is page-scoped, not index-scoped (default search misses anything older than the most recent ~50 threads). Use this when looking for archival messages. See `docs/research/endpoints/messages.md` "Search" section and `docs/recon/session-12.md`.
+Status log, next-session candidates, and the 2026-05-06 surface mapping now live
+in `docs/status.md` (moved out of this file 2026-07-28 to keep the always-loaded
+context lean). `WISHLIST.md` is the source of truth for what to build next —
+each candidate has a fuller writeup there.
 
-**Tests:** 599 passing. Run with `.venv/bin/pytest -q` from `openkp/`.
+Phase 0/1/2 complete, Phase 3 write tools underway. 27 MCP tools shipped.
+599 tests. Run with `.venv/bin/pytest -q` from `openkp/`.
 
-**CI:** GitHub Actions runs ruff + mypy + pytest on push/PR (Python 3.11/3.12/3.13). See `.github/workflows/ci.yml`. Status badge in root README.
+**Both write tools now differ in maturity — don't treat them alike.**
+`send_message`'s commit path was live-verified 2026-07-29 after two months of
+never having worked. `request_refill`'s commit path is still unverified and
+carries the same class of risk: its response shapes are inferred, and inferred
+shapes have been wrong every time they were finally checked. See
+`docs/postmortems/2026-07-29-send-message-compose-chain.md`.
 
-**PHI history rewrite + public release:** rewrite done locally 2026-05-10 (HEAD `57ede8e` post-rewrite, see session-19). All commits scrubbed of PHI in blobs and messages. `docs/recon/` removed from history. **Public release used a fresh-repo strategy** rather than the force-push + GC route originally planned: `hugooc/OpenKP` was created fresh as a public repo on 2026-05-11 and the rewritten history was pushed there as its initial state. No PHI commits ever existed on the public repo, so the GitHub-GC-of-unreferenced-refs step is moot. The original pre-rewrite history lives privately at `hugooc/OpenKP-private-archive` (partial snapshot from 2026-04-25, 25 commits — only the early phase of development). The complete pre-rewrite mirror was `/tmp/openkp-backup-pre-rewrite/` and self-cleans on reboot; if you've rebooted, it's gone.
-
-**Website:** [openkp.org](https://openkp.org) live on Cloudflare Pages as of 2026-05-11 (commit `25a7259`, see session-20). Source under `site/` — static single-page, no build step, no framework. CAIHL framing in copy, MCP-client-agnostic at runtime. Codex drafted, two review passes, then deployed via wrangler direct upload. Future deploys from repo root: `wrangler pages deploy site --project-name=openkp --branch=main --commit-dirty=true`. Public repo is live, so you can also switch the Pages project to GitHub auto-deploy any time via the Cloudflare dashboard — no longer gated on anything.
-
-**Site refresh 2026-06-05:** the hero panel remains a 3-slide carousel, now showcasing visit-note pattern reading, third-party access logs, and upcoming-order instructions. The tools section reads "27 MCP tools" with access logs plus upcoming tests/procedures in the read inventory. Mobile overflow was tightened for long MCP tool names and the install command block. The install card carries a short Windows-supported note linking to `docs/install/windows.md`. Implementation lives in `site/index.html` (HTML), `site/styles.css` (`.hero-carousel*`, `.slide-head`/`.slide-num`/`.slide-name`, `.chat-body`, `.tool-call`, `.carousel-dot*`), and `site/script.js` (carousel rotation, pauses on hover/focus, respects `prefers-reduced-motion`).
-
-**Relicense 2026-05-27 (ADR-007):** OpenKP moved from MIT to **PolyForm Noncommercial 1.0.0**. The relicense reflects Hugo's intent that OpenKP serve patients and not be extracted commercially. Free for personal, research, educational, advocacy, nonprofit, and government use. Commercial use (paid SaaS, paid consulting, embedding in paid products) requires a separate license. `openkp/LICENSE` carries the canonical PolyForm text plus a `Required Notice: Copyright (c) 2026 Hugo Campos` line. Snapshots cloned under MIT before 2026-05-27 remain MIT for whoever has them — we can't claw back what's been licensed. Doc refs, `pyproject.toml`, and `site/index.html` final-CTA all updated. See `docs/adr/007-relicense-to-polyform-noncommercial.md`.
-
-## Next session: start here
-
-Public release is done. Open code work is below.
-
-**Top candidates, in rough priority order:**
-
-1. **`list_documents()` + `download_document(document_id)`** — Document Center remains a separate corpus from labs, messages, AVS, and visit notes. Needs fresh response bodies for `LoadOtherDocuments` and the DDM BFF before implementation. See `docs/research/endpoints/documents.md`.
-
-2. **`reply_to_message(thread_id, body)`** — natural sibling to `send_message`. Needs a fresh HAR capture (the "Reply" button on an opened thread almost certainly hits a different endpoint than compose). Lower-risk than `send_message` because we're not picking a recipient — the thread already names one.
-
-3. **`send_message` polish from session 14 review:**
-   - **PCP role label fallback:** the PCP recipient row's `role` came back null because `specialty` and `pcpTypeDisplayName` were empty strings. Derive `"Primary Care"` from `recipientType == 1` so the UI/caller has something to display.
-   - **OOC awareness:** the recipient catalog carries `oocDateISO` and `oocContextString` for providers who are out of office. Surface those as fields on `MessageRecipient` so the preview can flag "your provider is out of office until X" before the user commits.
-   - **`body_preview` rename or cap:** today's field name suggests truncation but the implementation only truncates above 200 chars. Either rename to `body` (full echo always) or always cap with `...` suffix when longer.
-
-4. **`list_immunizations()` + `list_health_reminders()`** — useful preventive-care substrate surfaced in the portal menu. Needs fresh captures with bodies preserved.
-
-**Loose ends (optional, not blocking):**
-- ~~**`read_visit_notes` `iso` field is inconsistent.**~~ **Fixed 2026-05-10 (session 19).** AVS branch now parses the encounter-date display string ("Dec 04, 2025") to date-only ISO ("2025-12-04") via `_display_date_to_iso`. Clinical notes still carry full timestamp from `noteList[i].iso`. Field doc updated to spell out the two precision levels. Test pinned: `tests/test_visit_notes.py` asserts `avs.iso == "2025-01-01"` for the fixture.
-- **Live-verify the `is_telemedicine` heuristic on `list_appointments` / `list_past_visits`.** Recon had zero virtual visits, so the heuristic (Telemedicine OR EVisit OR CanShowTelemedicine) is inferential. Cowork-Claude bypassed it by reading `visit_type` directly ("Telephone", "Video Visit"), but next time Hugo's calendar has a video or phone visit, peek at the dump to see whether the heuristic actually fires.
-- **Capture a filter-applied appointments HAR** to learn how `LoadPast` accepts a provider/specialty filter ID. The filter UI HAR (session 15) only loaded the dropdown options; we never saw a filter actually applied. Unblocks `list_past_visits(provider="...")`-style queries.
-- ~~**Live-verify the `send_message` commit path**~~ — done 2026-07-29. It took three separate fixes; the "theoretical-correct + unit-tested" chain was wrong in three places because its response shapes were inferred, never captured, and the tests mocked the inference. See `docs/postmortems/2026-07-29-send-message-compose-chain.md`. **`request_refill`'s commit path is still unverified and carries the same risk.** Tail `~/.openkp/audit.log` from the dev session before firing `confirm=True`.
-- Verify the DELIVERED transition for the chlorthalidone order from session 11 next time you're in OpenKP. The order number sits in `docs/research/captures/kp-refill-2-with-order-details.har` (gitignored) and the SHIPPED state is already snapshot in session-13.md. The remaining unknowns are the carrier-tracking-attached state and the DELIVERED transition.
-- Live-verify `list_messages(deep_search=True)` from Cowork. The download tool was end-to-end verified in session 12, but the deep_search code path wasn't called explicitly — Cowork-Claude effectively reproduced the algorithm manually with `before_iso` walking.
-- ~~Spot-check whether MyChart "Documents" / "Visit Notes" / "After Visit Summary" sections hold reports OpenKP doesn't reach.~~ **Confirmed yes 2026-05-06** — Document Center is a separate surface (`LoadOtherDocuments`, plus a new `ddm/getdocumentsbff` BFF). See `docs/research/endpoints/documents.md`.
-
-## New surfaces mapped 2026-05-06 (partly shipped)
-
-A "click around with DevTools open" capture session surfaced three new data
-domains that weren't on our radar. Document Center and Billing/Coverage still
-need fresh response bodies before implementation. Upcoming Orders was later
-mapped with a redacted live probe and shipped on 2026-06-05.
-
-- **Billing & Coverage** — five new BFFs on `apims.kaiserpermanente.org`
-  (balance, coverage, guarantor, member-transition, notification prefs).
-  **Auth contract differs from pharmacy** — `X-appName` / `X-componentName` /
-  `X-region: HomeAndCAFH`, no `X-IBM-client-Id`, no `x-guid`. See
-  `docs/research/endpoints/billing.md`.
-- **Document Center** — `LoadOtherDocuments` (legacy) + `ddm/getdocumentsbff`
-  (new BFF). Two parallel documents surfaces, likely overlapping. Plus the
-  federal V/D/T `record-download` surface for C-CDA/PDF visit exports. See
-  `docs/research/endpoints/documents.md`.
-- ~~**Upcoming orders** — pending labs/imaging/procedures the doctor placed but
-  the patient hasn't completed yet, with patient prep instructions.~~ Shipped
-  2026-06-05 as `list_upcoming_orders` +
-  `read_upcoming_order_instructions`. See
-  `docs/research/endpoints/upcoming_orders.md`.
-
-**BFF heterogeneity warning** added to `docs/research/endpoints/medications.md`:
-the pharmacy header set is pharmacy-specific. Each new BFF needs its own
-header capture.
 
 ## Read these first
 
