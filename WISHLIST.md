@@ -121,7 +121,7 @@ Known endpoints noted in `CLAUDE.md`:
 
 ## `reply_to_message(thread_id, body, confirm=False)` — reply to an existing care-team thread
 
-**Use case:** `send_message` starts a new non-urgent message, but most real patient communication happens as replies inside existing threads. A patient should be able to ask, "reply to Dr. Sheridan with this update" without composing a new thread or reselecting the recipient/topic.
+**Use case:** `send_message` starts a new non-urgent message, but most real patient communication happens as replies inside existing threads. A patient should be able to ask, "reply to my cardiologist with this update" without composing a new thread or reselecting the recipient/topic.
 
 **Shape:** Phase 3 write tool using the same preview/confirm/audit pattern as `send_message`.
 

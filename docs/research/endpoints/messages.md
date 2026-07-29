@@ -721,11 +721,11 @@ draft-only mode, this is the rollback hook.
 
 ### `POST /mychartcn/api/medicaladvicerequests/UploadFile`
 
-Captured but **not implemented in v1**. The UI uses this to attach files
-(passport.jpg in our compose-2 capture). Returns a document ID:
+Captured but **not implemented in v1**. The UI uses this to attach a file to
+the compose form. Returns a document ID, ~85 chars in the usual `WP-` format:
 
 ```
-WP-24l0-2FcBmgy5XC6sSNTcoY1tQ-3D-3D-24ZhsRP4d16cTleIiYIA2ACtCh4Jnnrsvseq0e2DfK3g0-3D
+WP-<~85 chars>
 ```
 
 …that the next SaveDraft includes in `documentIds[]`. Future work.
