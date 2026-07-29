@@ -1,0 +1,79 @@
+name: Deploy site
+
+# openkp.org is a Cloudflare Pages project that was deployed by hand via
+# `wrangler pages deploy` until 2026-07-29. This workflow replaces that step.
+#
+# Only site/** triggers it — code and docs changes rebuild nothing, so a
+# normal PR merge does not touch the live site.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:        # Manual re-deploy from the Actions tab.
+
+# Never let two deploys race. Unlike CI we do NOT cancel in progress — a
+# half-finished upload that loses its slot to a newer run is worse than
+# waiting a few seconds.
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: stamp + deploy to Cloudflare Pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The revision stamp reads `git log` for site/, which needs real
+          # history. The default shallow clone would give the wrong date.
+          fetch-depth: 0
+
+      - name: Stamp revision date into the footer
+        # The footer date used to be typed by hand, which meant it silently
+        # went stale whenever someone forgot. Derive it from the last commit
+        # that actually touched site/ instead.
+        #
+        # This rewrites index.html at deploy time only. The committed file
+        # keeps whatever date was last written, so the repo and the deployed
+        # page differ by this one line — expected, not drift.
+        run: |
+          set -euo pipefail
+          DATE="$(git log -1 --format=%cs -- site/)"
+          if [ -z "$DATE" ]; then
+            echo "::error::No commit found touching site/ — cannot stamp a date."
+            exit 1
+          fi
+          PRETTY="$(date -u -d "$DATE" '+%B %-d, %Y')"
+          echo "Stamping revision date: $DATE ($PRETTY)"
+
+          sed -i -E \
+            "s|<time datetime=\"[^\"]*\">[^<]*</time>|<time datetime=\"$DATE\">$PRETTY</time>|" \
+            site/index.html
+
+          # Fail loudly if the anchor moved. A silent no-op here would put
+          # the stale-date problem right back, which is the whole reason
+          # this step exists.
+          if ! grep -q "<time datetime=\"$DATE\">$PRETTY</time>" site/index.html; then
+            echo "::error::Revision stamp did not apply. Has the <time> element in site/index.html changed?"
+            exit 1
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --commit-dirty is required because the stamp step edits
+          # index.html after checkout, leaving the tree dirty on purpose.
+          command: pages deploy site --project-name=openkp --branch=main --commit-dirty=true
+
+      - name: Summary
+        run: |
+          echo "### Site deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Revision date: $(git log -1 --format=%cs -- site/)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Live at <https://openkp.org>" >> "$GITHUB_STEP_SUMMARY"
