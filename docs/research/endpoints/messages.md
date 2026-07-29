@@ -460,8 +460,27 @@ RemoveComposeId calls together. Without it the SaveDraft endpoint rejects.
 
 **Request body:** `{}` (literally empty object).
 
-**Response (inferred, ~126 bytes):** `{"composeId": "WP-…"}` — the token is
-~100 chars of `WP-`-prefixed encoded bytes (Kaiser's standard ID format).
+**Response (verified live, 2026-07-29):** a **bare JSON string** — the whole
+body is the token, with no wrapper object:
+
+```
+"WP-<~125 more chars>"
+```
+
+`Content-Type: application/json; charset=utf-8`. The 130-byte body is a
+128-char `WP-`-prefixed token plus the two enclosing quote characters.
+`response.json()` returns a `str`, **not** a dict, and a second
+`json.loads()` on it raises `JSONDecodeError` — it is not double-encoded.
+
+The earlier inferred shape here was `{"composeId": "WP-…"}`, guessed from the
+`~126` byte size in the HAR. That guess cost a full debugging session: the
+parser looked for a `composeId` key, found a `str` instead of a dict, and
+raised "response missing composeId (response keys: str)". The HAR
+`content.size` values (130, 130, 126 across three captures) were consistent
+with a bare token the whole time — token length just varies per call.
+
+Parsed by `_extract_token` in `messages.py`, which accepts bare-string or
+wrapped forms.
 
 ### `POST /mychartcn/api/medicaladvicerequests/GetSubtopics`
 
@@ -538,15 +557,43 @@ SaveDraft / Send `viewers` array. (The "viewers" mechanism supports proxy
 access — e.g. a parent messaging on behalf of a minor child — but for v1
 we always send self-viewer.)
 
+**This call is required, not optional.** v1 originally skipped it and derived
+`wprId` from the recipient row, falling back to `""`. The captures show
+`viewers[0].wprId` populated with an 84-char token on every SaveDraft, and
+sending an empty one is a candidate cause of the `{"error": 2}` rejection
+(see "SaveDraft error codes" below). `_post_get_viewers` now makes the call
+and degrades to the old fallback rather than raising.
+
 **Request body:**
 
 ```json
 { "organizationId": "" }
 ```
 
-**Response (inferred):** `{"viewers": [{"wprId": "WP-…", "displayName": "…", "isSelf": true, …}], …}`
+**Response (verified live, 2026-07-29, 323 bytes):**
 
-Total 323 bytes, so very thin.
+```json
+{
+  "viewers": [
+    {
+      "wprId": "WP-…",
+      "name": "<patient name>",
+      "photoBlobFileName": "<uuid>",
+      "isSelf": true,
+      "isShown": false,
+      "isSelected": false,
+      "organizationId": ""
+    }
+  ],
+  "showOtherViewersOption": false,
+  "isOtherViewersSelected": false
+}
+```
+
+The name field is **`name`**, not `displayName` as previously inferred. The
+`wprId` is an 84-char `WP-` token. Pick the entry with `isSelf: true`.
+
+Note this response carries the patient's name — do not log it.
 
 ### `POST /mychartcn/api/medicaladvicerequests/SaveMedicalAdviceRequestDraft`
 
@@ -584,8 +631,51 @@ The MyChart UI fires this on every keystroke — OpenKP fires it once.
 - `documentIds` is the file IDs returned by `UploadFile` (out of scope for
   v1 send).
 
-**Response (inferred, ~123 bytes):** `{"conversationId": "WP-…"}` (~100 chars
-token + JSON wrapping).
+#### Recipient key set (verified live, 2026-07-29)
+
+The browser sends **exactly five** recipient keys and drops everything else
+`GetMedicalAdviceRequestRecipients` returned:
+
+| key | in captures |
+| --- | --- |
+| `displayName` | populated |
+| `userId` | 84-char token |
+| `providerId` | 82-char token |
+| `poolId` | **empty string** |
+| `departmentId` | **empty string** |
+
+`poolId` and `departmentId` are empty in the browser too, so an empty value
+there is correct and not a failed lookup. v1 originally echoed the whole
+recipient row, sending 12 keys where the browser sends 5. `_RECIPIENT_KEYS`
+in `messages.py` now pins the set.
+
+#### SaveDraft error codes
+
+Kaiser returns application errors as **HTTP 200** with a tiny JSON body, so
+`raise_for_status()` does not catch them:
+
+```json
+{"error": 2}
+```
+
+| code | meaning |
+| --- | --- |
+| `0` | success — `conversationId` is present alongside it |
+| `2` | rejected. Seen with an empty `viewers[0].wprId` and a 12-key recipient object. Both were wrong at the time, so this does not pin down which one Kaiser objected to. |
+
+`error` is present on success too, so a robust check is `error != 0` rather
+than "is `conversationId` missing".
+
+**Response (verified live, 2026-07-29, 115 bytes):**
+
+```json
+{"conversationId": "WP-…", "error": 0}
+```
+
+An object, **not** a bare string. Unlike GetComposeId, the originally
+inferred wrapper shape here was correct — the byte-count reasoning that
+predicted a bare 121-char token was wrong, and the parser only survived it
+because `_extract_token` accepts both forms.
 
 ### `POST /mychartcn/api/medicaladvicerequests/SendMedicalAdviceRequest`
 
