@@ -1357,7 +1357,14 @@ def test_build_message_preview_warns_when_subject_or_body_empty():
     assert any("body" in w for w in pv.warnings)
 
 
-def test_build_compose_payload_echoes_recipient_raw_fields():
+def test_build_compose_payload_trims_recipient_to_the_browser_key_set():
+    """The recipient object must carry exactly the five keys the UI sends.
+
+    All three compose captures show the browser trimming the recipient row
+    down to displayName / userId / poolId / providerId / departmentId. We
+    used to echo the whole row instead, which sent Kaiser 12 keys where the
+    browser sends 5.
+    """
     rec = MessageRecipient(
         recipient_id="WP-rec",
         display_name="TEST PROVIDER",
@@ -1367,7 +1374,9 @@ def test_build_compose_payload_echoes_recipient_raw_fields():
             "poolId": "",
             "providerId": "WP-prov",
             "departmentId": "",
-            "extraKpField": "preserve me",  # Verify unknown fields survive round-trip.
+            "extraKpField": "dropped",       # Not in the browser payload.
+            "photoUrl": "also dropped",
+            "recipientType": 1,
         },
     )
     topic = MessageTopic(value="100", title="A")
@@ -1378,20 +1387,46 @@ def test_build_compose_payload_echoes_recipient_raw_fields():
         topic=topic,
         subject="subj",
         body_lines=["line one", "", "line three"],
+        wpr_id="WP-self",
     )
 
     assert body["composeId"] == "CID"
     assert body["conversationId"] == "CONV"
+    assert set(body["recipient"]) == {
+        "displayName", "userId", "poolId", "providerId", "departmentId",
+    }
     assert body["recipient"]["userId"] == "WP-rec"
-    assert body["recipient"]["extraKpField"] == "preserve me"
+    assert body["recipient"]["providerId"] == "WP-prov"
+    # Empty in the captures too — not a failed lookup on our side.
+    assert body["recipient"]["poolId"] == ""
+    assert body["recipient"]["departmentId"] == ""
     assert body["topic"] == {"title": "A", "value": "100"}
     assert body["messageBody"] == ["line one", "", "line three"]
     assert body["messageSubject"] == "subj"
     assert body["documentIds"] == []
     assert body["includeOtherViewers"] is False
     assert body["organizationId"] == ""
-    # Viewers pulls from recipient.raw if present, else empty wprId.
-    assert body["viewers"] == [{"wprId": ""}]
+    # wprId now comes from GetViewers, which the captures show populated.
+    assert body["viewers"] == [{"wprId": "WP-self"}]
+
+
+def test_build_compose_payload_falls_back_when_get_viewers_gives_nothing():
+    """A failed GetViewers must not block the send — degrade, don't raise."""
+    rec = MessageRecipient(
+        recipient_id="WP-rec",
+        display_name="TEST PROVIDER",
+        raw={"userId": "WP-rec", "wprId": "WP-from-row"},
+    )
+    body = _build_compose_payload(
+        compose_id="CID",
+        conversation_id="",
+        recipient=rec,
+        topic=MessageTopic(value="100", title="A"),
+        subject="subj",
+        body_lines=["x"],
+        wpr_id="",
+    )
+    assert body["viewers"] == [{"wprId": "WP-from-row"}]
 
 
 def test_build_compose_payload_pulls_wprid_from_recipient_when_present():
@@ -1681,8 +1716,11 @@ async def test_send_message_dry_run_short_circuits(tmp_path: Path, monkeypatch):
         httpx.Response(200, json=[_sample_recipient_row(user_id="WP-rec")]),
         httpx.Response(200, text=_csrf_html()),                              # CSRF inside topics
         httpx.Response(200, json=[{"value": "100", "title": "T"}]),
-        httpx.Response(200, json={"composeId": "CID-123"}),                  # GetComposeId
-        httpx.Response(200, json={"conversationId": "CONV-1"}),              # SaveDraft
+        httpx.Response(200, json="CID-123"),                                 # GetComposeId (bare string, verified live)
+        httpx.Response(200, json={"viewers": [{"wprId": "WP-self", "name": "T P",
+            "isSelf": True, "isShown": False, "organizationId": ""}],
+            "showOtherViewersOption": False}),                             # GetViewers (verified shape)
+        httpx.Response(200, json={"conversationId": "CONV-1", "error": 0}),   # SaveDraft (verified shape)
         # NO Send POST under dry-run.
         httpx.Response(200, json={}),                                        # RemoveComposeId cleanup
     ]
@@ -1747,8 +1785,11 @@ async def test_send_message_commit_happy_path(tmp_path: Path, monkeypatch):
         httpx.Response(200, json=[_sample_recipient_row(user_id="WP-rec")]),
         httpx.Response(200, text=_csrf_html()),                              # CSRF inside topics
         httpx.Response(200, json=[{"value": "100", "title": "T"}]),
-        httpx.Response(200, json={"composeId": "CID-1"}),                    # GetComposeId
-        httpx.Response(200, json={"conversationId": "CONV-1"}),              # SaveDraft
+        httpx.Response(200, json="CID-1"),                                   # GetComposeId (bare string, verified live)
+        httpx.Response(200, json={"viewers": [{"wprId": "WP-self", "name": "T P",
+            "isSelf": True, "isShown": False, "organizationId": ""}],
+            "showOtherViewersOption": False}),                             # GetViewers (verified shape)
+        httpx.Response(200, json={"conversationId": "CONV-1", "error": 0}),   # SaveDraft (verified shape)
         httpx.Response(200, json={}),                                        # Send (200 = success)
         httpx.Response(200, json={}),                                        # RemoveComposeId cleanup
     ]
@@ -1801,8 +1842,11 @@ async def test_send_message_commit_records_error_on_send_failure(tmp_path: Path,
         httpx.Response(200, json=[_sample_recipient_row(user_id="WP-rec")]),
         httpx.Response(200, text=_csrf_html()),                              # CSRF inside topics
         httpx.Response(200, json=[{"value": "100", "title": "T"}]),
-        httpx.Response(200, json={"composeId": "CID-1"}),                    # GetComposeId
-        httpx.Response(200, json={"conversationId": "CONV-1"}),              # SaveDraft
+        httpx.Response(200, json="CID-1"),                                   # GetComposeId (bare string, verified live)
+        httpx.Response(200, json={"viewers": [{"wprId": "WP-self", "name": "T P",
+            "isSelf": True, "isShown": False, "organizationId": ""}],
+            "showOtherViewersOption": False}),                             # GetViewers (verified shape)
+        httpx.Response(200, json={"conversationId": "CONV-1", "error": 0}),   # SaveDraft (verified shape)
         httpx.Response(500, json={"error": "boom"}),                         # Send fails
         httpx.Response(200, json={}),                                        # RemoveComposeId cleanup (best-effort)
     ]
@@ -1858,6 +1902,89 @@ async def test_send_message_compose_id_missing_raises_runtime_error(tmp_path: Pa
                 confirm=True,
                 data_dir=tmp_path,
             )
+    finally:
+        p.stop()
+
+
+# --- compose-token response shapes ---
+
+
+def test_extract_token_accepts_bare_string():
+    """GetComposeId returns the token as a bare JSON string, not an object.
+
+    Verified live 2026-07-29: the whole 130-byte body is `"WP-<128 chars>"`,
+    so `response.json()` hands back a `str`. Parsing it as a dict and looking
+    for a `composeId` key is what produced the original
+    "missing composeId (response keys: str)" failure.
+    """
+    from openkp.scrapers.messages import _extract_token
+
+    assert _extract_token("WP-abc123", ("composeId", "ComposeId", "id")) == "WP-abc123"
+    assert _extract_token("  WP-padded  ", ("composeId",)) == "WP-padded"
+    assert _extract_token("", ("composeId",)) is None
+    assert _extract_token("   ", ("composeId",)) is None
+
+
+def test_extract_token_still_accepts_wrapped_forms():
+    """Bare-string support must not break the object shapes we already handle."""
+    from openkp.scrapers.messages import _extract_token
+
+    keys = ("composeId", "ComposeId", "id")
+    assert _extract_token({"composeId": "WP-1"}, keys) == "WP-1"
+    assert _extract_token({"data": {"composeId": "WP-2"}}, keys) == "WP-2"
+    assert _extract_token({}, keys) is None
+    assert _extract_token(None, keys) is None
+    assert _extract_token(["WP-nope"], keys) is None
+
+
+def test_describe_payload_names_the_type_not_a_fake_key_list():
+    """The old message said "response keys: str", which read as a key named str."""
+    from openkp.scrapers.messages import _describe_payload
+
+    assert _describe_payload("WP-x") == "type: str"
+    assert _describe_payload(None) == "type: NoneType"
+    assert _describe_payload({"a": 1, "b": 2}) == "type: dict, keys: ['a', 'b']"
+
+
+@pytest.mark.asyncio
+async def test_send_message_accepts_bare_string_save_draft_response(tmp_path: Path, monkeypatch):
+    """SaveDraft's shape is unverified, so the parser must accept either form.
+
+    Docs infer ~123 bytes, which by GetComposeId's arithmetic (130 bytes =
+    128-char token + 2 quotes) points at a bare token here too. Until it is
+    captured live, both shapes have to work.
+    """
+    monkeypatch.delenv(DRY_RUN_ENV, raising=False)
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    responses = [
+        httpx.Response(200, text=_csrf_html()),                              # CSRF for whole flow
+        httpx.Response(200, text=_csrf_html()),                              # CSRF inside recipients
+        httpx.Response(200, json=[_sample_recipient_row(user_id="WP-rec")]),
+        httpx.Response(200, text=_csrf_html()),                              # CSRF inside topics
+        httpx.Response(200, json=[{"value": "100", "title": "T"}]),
+        httpx.Response(200, json="WP-compose-token"),                        # GetComposeId (bare)
+        httpx.Response(200, json={"viewers": [{"wprId": "WP-self", "name": "T P",
+            "isSelf": True, "isShown": False, "organizationId": ""}],
+            "showOtherViewersOption": False}),                             # GetViewers (verified shape)
+        httpx.Response(200, json="WP-conversation-token"),                   # SaveDraft (bare)
+        httpx.Response(200, json={}),                                        # Send
+        httpx.Response(200, json={}),                                        # RemoveComposeId cleanup
+    ]
+    _, p = _patch_http(responses)
+    try:
+        result = await send_message(
+            KaiserRequest(store),
+            recipient_id="WP-rec",
+            topic_value="100",
+            subject="hi",
+            body="b",
+            confirm=True,
+            data_dir=tmp_path,
+        )
+        assert result.conversation_id == "WP-conversation-token"
+        assert result.succeeded is True
     finally:
         p.stop()
 

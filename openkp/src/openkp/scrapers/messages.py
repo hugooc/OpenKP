@@ -1171,6 +1171,10 @@ async def _commit_send_message(
 
     try:
         compose_id = await _post_get_compose_id(client, csrf)
+        # The MyChart UI calls GetViewers between GetComposeId and SaveDraft.
+        # Skipping it left viewers[0].wprId empty, which the captures show
+        # populated with an 84-char token.
+        wpr_id = await _post_get_viewers(client, csrf)
         conversation_id = await _post_save_draft(
             client=client,
             csrf=csrf,
@@ -1180,6 +1184,7 @@ async def _commit_send_message(
             topic=topic,
             subject=subject,
             body_lines=body_lines,
+            wpr_id=wpr_id,
         )
 
         if is_dry_run():
@@ -1212,6 +1217,7 @@ async def _commit_send_message(
             topic=topic,
             subject=subject,
             body_lines=body_lines,
+            wpr_id=wpr_id,
         )
     except Exception as exc:
         audit_log_event(
@@ -1247,16 +1253,45 @@ async def _commit_send_message(
     return confirmation
 
 
+def _extract_token(payload: Any, keys: tuple[str, ...]) -> str | None:
+    """Pull a `WP-`-style token that may arrive bare or wrapped.
+
+    GetComposeId returns the token as a **bare JSON string literal** — the
+    entire body is `"WP-…"` with no object around it, so `response.json()`
+    gives a `str`, not a dict (verified live 2026-07-29, 130-byte body).
+    Other endpoints wrap the same kind of token in an object, so accept both
+    rather than betting on one.
+    """
+    if isinstance(payload, str):
+        return payload.strip() or None
+    return _extract_first_string_value(payload, keys)
+
+
+def _describe_payload(payload: Any) -> str:
+    """Describe an unusable payload for an error message.
+
+    Says `type: str` rather than `keys: str`, which read as a key list named
+    "str" and sent the first debugging pass looking for a missing field on an
+    object that never existed.
+    """
+    kind = type(payload).__name__
+    if isinstance(payload, dict):
+        return f"type: dict, keys: {list(payload.keys())}"
+    return f"type: {kind}"
+
+
 async def _post_get_compose_id(client: KaiserRequest, csrf: str) -> str:
-    """POST GetComposeId. Returns the composeId token."""
+    """POST GetComposeId. Returns the composeId token.
+
+    Response is a bare JSON string: `"WP-<~125 chars>"`. See `_extract_token`.
+    """
     response = await client.post(COMPOSE_ID_PATH, headers=_api_headers(csrf), json={})
     response.raise_for_status()
     payload = response.json() if response.content else {}
-    compose_id = _extract_first_string_value(payload, ("composeId", "ComposeId", "id"))
+    compose_id = _extract_token(payload, ("composeId", "ComposeId", "id"))
     if not compose_id:
         raise RuntimeError(
-            "GetComposeId response missing composeId (response keys: "
-            f"{list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__})"
+            f"GetComposeId returned no usable composeId ({_describe_payload(payload)})"
         )
     return compose_id
 
@@ -1271,6 +1306,7 @@ async def _post_save_draft(
     topic: MessageTopic,
     subject: str,
     body_lines: list[str],
+    wpr_id: str = "",
 ) -> str:
     """POST SaveMedicalAdviceRequestDraft. Returns the conversationId.
 
@@ -1284,15 +1320,20 @@ async def _post_save_draft(
         topic=topic,
         subject=subject,
         body_lines=body_lines,
+        wpr_id=wpr_id,
     )
     response = await client.post(DRAFT_SAVE_PATH, headers=_api_headers(csrf), json=body)
     response.raise_for_status()
+    # Shape still unverified: the chain never got past GetComposeId, so this
+    # response has never been seen. Docs infer ~123 bytes, which by the same
+    # arithmetic that resolved GetComposeId (130 = 128-char token + 2 quotes)
+    # points at a bare string here too. `_extract_token` accepts either.
     payload = response.json() if response.content else {}
-    conv_id = _extract_first_string_value(payload, ("conversationId", "ConversationId", "id"))
+    conv_id = _extract_token(payload, ("conversationId", "ConversationId", "id"))
     if not conv_id:
         raise RuntimeError(
-            "SaveMedicalAdviceRequestDraft response missing conversationId "
-            f"(response keys: {list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__})"
+            "SaveMedicalAdviceRequestDraft returned no usable conversationId "
+            f"({_describe_payload(payload)})"
         )
     return conv_id
 
@@ -1307,6 +1348,7 @@ async def _post_send_message(
     topic: MessageTopic,
     subject: str,
     body_lines: list[str],
+    wpr_id: str = "",
 ) -> None:
     """POST SendMedicalAdviceRequest. We rely on HTTP 200 = success.
 
@@ -1320,6 +1362,7 @@ async def _post_send_message(
         topic=topic,
         subject=subject,
         body_lines=body_lines,
+        wpr_id=wpr_id,
     )
     response = await client.post(SEND_PATH, headers=_api_headers(csrf), json=body)
     response.raise_for_status()
@@ -1352,6 +1395,7 @@ def _build_compose_payload(
     topic: MessageTopic,
     subject: str,
     body_lines: list[str],
+    wpr_id: str = "",
 ) -> dict[str, Any]:
     """Build the SaveDraft / Send body shape exactly as the MyChart UI does.
 
@@ -1368,7 +1412,7 @@ def _build_compose_payload(
         "topic": {"title": topic.title or "", "value": topic.value},
         "conversationId": conversation_id,
         "organizationId": "",
-        "viewers": _build_viewers_payload(recipient),
+        "viewers": _build_viewers_payload(recipient, wpr_id),
         "messageBody": list(body_lines),
         "messageSubject": subject,
         "documentIds": [],
@@ -1377,37 +1421,95 @@ def _build_compose_payload(
     }
 
 
+# The exact recipient key set the MyChart UI sends on SaveDraft / Send,
+# verified against all three compose HAR captures. The browser trims the
+# recipient row down to these five and drops everything else it received
+# from GetMedicalAdviceRequestRecipients.
+_RECIPIENT_KEYS = ("displayName", "userId", "poolId", "providerId", "departmentId")
+
+
 def _build_recipient_payload(recipient: MessageRecipient) -> dict[str, Any]:
-    """Echo the recipient row in the shape Kaiser expects on Send.
+    """Build the recipient object exactly as the MyChart UI does.
 
-    Pulls from `raw` first so any Kaiser-side fields we don't model (added
-    later, region-specific, etc.) survive the round trip. Backfills the five
-    canonical keys with empty strings if missing.
-    """
-    raw = dict(recipient.raw) if isinstance(recipient.raw, dict) else {}
-    raw.setdefault("displayName", recipient.display_name or "")
-    for key in ("userId", "poolId", "providerId", "departmentId"):
-        raw.setdefault(key, "")
-    return raw
-
-
-def _build_viewers_payload(recipient: MessageRecipient) -> list[dict[str, str]]:
-    """Build the `viewers` array — currently always one self-viewer.
-
-    The wprId comes from the recipient row's `wprId` if present (some Kaiser
-    payloads embed it), otherwise from `viewerId` or empty as a last resort.
-    A live `GetViewers` call would be the canonical source; for v1 we trust
-    whatever Kaiser wrote into the recipient row, falling back to empty —
-    Kaiser's server-side validation will reject a clearly-bad viewers array.
+    Only the five keys in `_RECIPIENT_KEYS`, in that order. We previously
+    echoed the whole `raw` row on the theory that unknown Kaiser fields
+    should survive the round trip, which sent 12 keys where the browser
+    sends 5. `poolId` and `departmentId` are empty in the captures too, so
+    empty is correct here and not a missing lookup.
     """
     raw = recipient.raw if isinstance(recipient.raw, dict) else {}
-    wpr_id = (
-        _str_or_none(raw.get("wprId"))
+    out: dict[str, Any] = {}
+    for key in _RECIPIENT_KEYS:
+        value = _str_or_none(raw.get(key))
+        if value is None and key == "displayName":
+            value = recipient.display_name or ""
+        out[key] = value if value is not None else ""
+    return out
+
+
+def _build_viewers_payload(recipient: MessageRecipient, wpr_id: str = "") -> list[dict[str, str]]:
+    """Build the `viewers` array — always one self-viewer.
+
+    `wpr_id` comes from a live `GetViewers` call, which is what the MyChart
+    UI does before SaveDraft. The captures show `viewers[0].wprId` populated
+    with an 84-char token, so the previous empty-string fallback was sending
+    Kaiser a viewers array it had every reason to reject. Falls back to the
+    recipient row's own fields only if GetViewers gave us nothing.
+    """
+    raw = recipient.raw if isinstance(recipient.raw, dict) else {}
+    resolved = (
+        _str_or_none(wpr_id)
+        or _str_or_none(raw.get("wprId"))
         or _str_or_none(raw.get("viewerId"))
         or _str_or_none(raw.get("selfWprId"))
         or ""
     )
-    return [{"wprId": wpr_id}]
+    return [{"wprId": resolved}]
+
+
+async def _post_get_viewers(client: KaiserRequest, csrf: str) -> str:
+    """POST GetViewers. Returns the self viewer's wprId, or "" if unavailable.
+
+    Request body is `{"organizationId": ""}`, verified against all three
+    compose captures. The response body was never captured (the same HAR
+    buffer gap that hid GetComposeId), so parse it tolerantly and log the
+    real shape rather than betting on one. Never raises: a missing viewer
+    degrades to the old behaviour instead of blocking the send.
+    """
+    try:
+        response = await client.post(
+            VIEWERS_PATH, headers=_api_headers(csrf), json={"organizationId": ""}
+        )
+        response.raise_for_status()
+        payload = response.json() if response.content else {}
+    except Exception as exc:
+        logger.warning("GetViewers failed (%s); falling back to recipient row", type(exc).__name__)
+        return ""
+
+    if isinstance(payload, str):
+        return payload.strip()
+    rows: Any = payload
+    if isinstance(payload, dict):
+        for key in ("viewers", "Viewers", "viewerList", "data"):
+            if isinstance(payload.get(key), list):
+                rows = payload[key]
+                break
+        else:
+            rows = [payload]
+    if not isinstance(rows, list):
+        return ""
+    # Prefer the row flagged as the patient themself, else the first usable one.
+    for row in rows:
+        if isinstance(row, dict) and row.get("isSelf") is True:
+            found = _extract_first_string_value(row, ("wprId", "WprId", "id"))
+            if found:
+                return found
+    for row in rows:
+        if isinstance(row, dict):
+            found = _extract_first_string_value(row, ("wprId", "WprId", "id"))
+            if found:
+                return found
+    return ""
 
 
 DEBUG_DUMPS_ENV = "OPENKP_DEBUG_DUMPS"
