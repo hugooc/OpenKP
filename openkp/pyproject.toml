@@ -33,8 +33,17 @@ Issues = "https://github.com/hugooc/OpenKP/issues"
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
-    "ruff>=0.5.0",
-    "mypy>=1.10.0",
+    # Linters are pinned to a major line on purpose. They were previously
+    # unbounded, so CI installed whatever had shipped that morning while
+    # local venvs kept an older version. Ruff 0.16.0 landed new rules and
+    # turned every PR red with 87 findings in untouched files, on a repo
+    # whose last commit had passed cleanly.
+    #
+    # A linter that changes under you is a broken build with no code change
+    # behind it. Bump these deliberately, in their own PR, so the findings
+    # arrive when someone has time to read them.
+    "ruff>=0.15.0,<0.16.0",
+    "mypy>=1.10.0,<2.0.0",
 ]
 
 [project.scripts]
