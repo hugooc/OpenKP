@@ -475,6 +475,12 @@ section {
   line-height: 1.55;
 }
 
+.site-footer p.footer-updated {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
 .question-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 34px;
