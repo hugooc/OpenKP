@@ -37,6 +37,37 @@ Both are explicitly accepted public identifiers.
 - `hugooc/OpenKP-private-archive` on GitHub holds the 2026-04-25 partial snapshot. Persistent. Private.
 - The complete pre-rewrite history (28 commits including the late-phase PHI) exists only in whatever local clones you happen to have. If the `/tmp` backup is gone and no other clones exist, that history is unrecoverable. The rewritten version is the authoritative version going forward.
 
+### Ongoing PHI scan — run before publishing anything
+
+The 2026-05-10 rewrite cleaned history, but it was a one-time event. New PHI
+can still land in a new commit, and twice it did:
+
+- `WISHLIST.md` named a real treating provider inside a use-case sentence.
+  Combined with the author's name in LICENSE and the ADRs, that discloses a
+  care relationship.
+- `messages.md` pasted a real ~85-char document ID straight out of a HAR,
+  with the line above it naming the file that had been uploaded.
+
+Neither survived the rewrite because neither existed yet. Both read as
+harmless illustrative detail. **That is the failure mode** — not carelessness,
+but a real value pressed into service as an example.
+
+```
+python3 scripts/phi-scan.py            # working tree, exits non-zero on a hit
+python3 scripts/phi-scan.py --history  # also reports every commit that added one
+```
+
+Both findings above were removed from the working tree on 2026-07-29. **Both
+remain in history** (`0def0c8`, `6fc9d1b`). Clearing them means another
+rewrite, which this time would break the existing fork and every clone —
+unlike the 2026-05-11 fresh-repo path, which worked precisely because the
+public repo had never held the bad commits. Decide deliberately; the scan
+reports history separately so the choice stays visible.
+
+The scan is deliberately **not** wired into CI. A publication gate that fails
+a release on a false positive gets disabled, and this one is meant to be read
+by a human.
+
 ## 3. PHI outside the repo (informational, not a publication concern)
 
 These have always lived outside the repo (gitignored or sidecar) and will continue to:

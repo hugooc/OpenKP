@@ -1267,6 +1267,33 @@ def _extract_token(payload: Any, keys: tuple[str, ...]) -> str | None:
     return _extract_first_string_value(payload, keys)
 
 
+def _raise_for_kaiser_error(payload: Any, endpoint: str) -> None:
+    """Raise if an Epic-style `{"error": N}` field is present and non-zero.
+
+    Kaiser returns application-level failures as **HTTP 200** with a tiny JSON
+    body, so `raise_for_status()` sails straight past them. SaveDraft answered
+    `{"error": 2}` for an entire debugging session while the transport looked
+    perfectly healthy.
+
+    `error: 0` accompanies success, so only a non-zero value is a failure.
+    Endpoints that omit the field entirely are left alone.
+    """
+    if not isinstance(payload, dict):
+        return
+    for key in ("error", "Error", "errorCode"):
+        if key not in payload:
+            continue
+        code = payload[key]
+        if isinstance(code, bool) or not isinstance(code, (int, str)):
+            continue
+        if str(code).strip() in ("", "0"):
+            return
+        raise RuntimeError(
+            f"{endpoint} rejected the request with {key}={code!r}. "
+            "Kaiser returns these as HTTP 200, see messages.md 'SaveDraft error codes'."
+        )
+
+
 def _describe_payload(payload: Any) -> str:
     """Describe an unusable payload for an error message.
 
@@ -1324,11 +1351,9 @@ async def _post_save_draft(
     )
     response = await client.post(DRAFT_SAVE_PATH, headers=_api_headers(csrf), json=body)
     response.raise_for_status()
-    # Shape still unverified: the chain never got past GetComposeId, so this
-    # response has never been seen. Docs infer ~123 bytes, which by the same
-    # arithmetic that resolved GetComposeId (130 = 128-char token + 2 quotes)
-    # points at a bare string here too. `_extract_token` accepts either.
+    # Verified live 2026-07-29: {"conversationId": "WP-…", "error": 0}.
     payload = response.json() if response.content else {}
+    _raise_for_kaiser_error(payload, "SaveMedicalAdviceRequestDraft")
     conv_id = _extract_token(payload, ("conversationId", "ConversationId", "id"))
     if not conv_id:
         raise RuntimeError(
@@ -1350,10 +1375,13 @@ async def _post_send_message(
     body_lines: list[str],
     wpr_id: str = "",
 ) -> None:
-    """POST SendMedicalAdviceRequest. We rely on HTTP 200 = success.
+    """POST SendMedicalAdviceRequest.
 
-    Response body shape (~86 bytes) is unknown — see messages.md "Open
-    response-shape questions". Not load-bearing for correctness.
+    HTTP 200 alone is not proof of success on these endpoints. SaveDraft
+    returns `{"error": N}` with a 200 when it rejects, so this checks the
+    same field rather than trusting the status code. The full response shape
+    here (~86 bytes) is still uncaptured; if it carries no `error` field the
+    check is a no-op and 200 remains the signal.
     """
     body = _build_compose_payload(
         compose_id=compose_id,
@@ -1366,6 +1394,8 @@ async def _post_send_message(
     )
     response = await client.post(SEND_PATH, headers=_api_headers(csrf), json=body)
     response.raise_for_status()
+    payload = response.json() if response.content else {}
+    _raise_for_kaiser_error(payload, "SendMedicalAdviceRequest")
 
 
 async def _post_remove_compose_id_safely(

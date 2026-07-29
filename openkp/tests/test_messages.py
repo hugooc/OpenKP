@@ -1989,6 +1989,69 @@ async def test_send_message_accepts_bare_string_save_draft_response(tmp_path: Pa
         p.stop()
 
 
+# --- Kaiser HTTP-200 error codes ---
+
+
+def test_raise_for_kaiser_error_flags_nonzero():
+    """Kaiser rejects with HTTP 200 + {"error": N}, so status is not enough.
+
+    SaveDraft answered {"error": 2} for an entire debugging session while
+    raise_for_status() saw a perfectly healthy 200.
+    """
+    from openkp.scrapers.messages import _raise_for_kaiser_error
+
+    with pytest.raises(RuntimeError, match="error=2"):
+        _raise_for_kaiser_error({"error": 2}, "SaveMedicalAdviceRequestDraft")
+    with pytest.raises(RuntimeError, match="SendMedicalAdviceRequest"):
+        _raise_for_kaiser_error({"error": "7"}, "SendMedicalAdviceRequest")
+
+
+def test_raise_for_kaiser_error_allows_success_and_absent():
+    """error: 0 rides along with success, and most endpoints omit it."""
+    from openkp.scrapers.messages import _raise_for_kaiser_error
+
+    _raise_for_kaiser_error({"conversationId": "WP-1", "error": 0}, "SaveDraft")
+    _raise_for_kaiser_error({"conversationId": "WP-1", "error": "0"}, "SaveDraft")
+    _raise_for_kaiser_error({"conversationId": "WP-1"}, "SaveDraft")
+    _raise_for_kaiser_error({}, "SaveDraft")
+    _raise_for_kaiser_error("WP-bare-string", "GetComposeId")
+    _raise_for_kaiser_error(None, "GetComposeId")
+
+
+@pytest.mark.asyncio
+async def test_send_message_surfaces_save_draft_error_code(tmp_path: Path, monkeypatch):
+    """A 200 carrying {"error": 2} must fail loudly, not look like success."""
+    monkeypatch.delenv(DRY_RUN_ENV, raising=False)
+    from openkp.scrapers.request import KaiserRequest
+
+    store = _make_store()
+    responses = [
+        httpx.Response(200, text=_csrf_html()),
+        httpx.Response(200, text=_csrf_html()),
+        httpx.Response(200, json=[_sample_recipient_row(user_id="WP-rec")]),
+        httpx.Response(200, text=_csrf_html()),
+        httpx.Response(200, json=[{"value": "100", "title": "T"}]),
+        httpx.Response(200, json="WP-compose"),                               # GetComposeId
+        httpx.Response(200, json={"viewers": [{"wprId": "WP-self", "isSelf": True}]}),
+        httpx.Response(200, json={"error": 2}),                               # SaveDraft rejects
+        httpx.Response(200, json={}),                                         # RemoveComposeId
+    ]
+    _, p = _patch_http(responses)
+    try:
+        with pytest.raises(RuntimeError, match="error=2"):
+            await send_message(
+                KaiserRequest(store),
+                recipient_id="WP-rec",
+                topic_value="100",
+                subject="hi",
+                body="b",
+                confirm=True,
+                data_dir=tmp_path,
+            )
+    finally:
+        p.stop()
+
+
 # --- debug-dump gate ---
 
 

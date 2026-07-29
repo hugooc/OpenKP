@@ -268,7 +268,7 @@ def _profile_with_full_contact() -> Profile:
         middle_name="",
         email="fake@example.com",
         guid=_FAKE_GUID,
-        mrn="12345678",
+        mrn="000-555-0000",
         addresses=[
             Address(
                 type="MAILING",
@@ -396,15 +396,15 @@ def test_primary_address_falls_back_to_first():
 
 def test_primary_mobile_picks_mobile_type():
     p = Profile(phones=[
-        Phone(type="HOME", number="510-111-1111"),
+        Phone(type="HOME", number="510-555-1111"),
         Phone(type="MOBILE", number="415-555-0123"),
     ])
     assert _primary_mobile_number(p) == "415-555-0123"
 
 
 def test_primary_mobile_falls_back_to_first():
-    p = Profile(phones=[Phone(type="HOME", number="510-111-1111")])
-    assert _primary_mobile_number(p) == "510-111-1111"
+    p = Profile(phones=[Phone(type="HOME", number="510-555-1111")])
+    assert _primary_mobile_number(p) == "510-555-1111"
 
 
 def test_estimated_mail_copay_finds_mail_option():
